@@ -25,7 +25,9 @@ O TLS mínimo 1.2 vale para todos os routers sem nenhuma label.
 1. **Imagem privada no GHCR, construída no CI.** A VPS nunca compila nada
    (sem `build:` no compose de produção).
 2. **Sem `ports:`.** Só `expose` (documentação) e a rede externa `proxy`. Todo
-   tráfego entra pelo Traefik.
+   tráfego da internet entra pelo Traefik. (Os outros containers da rede
+   `proxy` ainda alcançam o site direto: não confie em `X-Forwarded-For`
+   vindo deles.)
 3. **Rede `proxy`** declarada como externa, e `traefik.docker.network=proxy`.
 4. **Healthcheck obrigatório**, para o Docker (e você) saberem se o app está
    saudável: no serviço do compose **ou** como `HEALTHCHECK` no Dockerfile da
