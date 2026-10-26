@@ -7,8 +7,8 @@ secao "Node exporter: container"
 ID_NODE="$(borda ps -q node-exporter)"
 afirmar "o container do node exporter existe" test -n "$ID_NODE"
 
-afirmar "node exporter está saudável" \
-  test "$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$ID_NODE" 2>/dev/null)" = healthy
+# saude() vem de 01-borda.sh (carregado antes pelo smoke.sh).
+afirmar "node exporter está saudável" test "$(saude "$ID_NODE")" = healthy
 afirmar "usa a rede do host (network_mode: host), fora da rede proxy" \
   test "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$ID_NODE" 2>/dev/null)" = host
 afirmar "enxerga os processos do host (pid: host)" \
