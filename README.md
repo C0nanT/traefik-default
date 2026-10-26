@@ -1,6 +1,102 @@
 # Traefik na VPS
 
-Modelo de borda (Traefik v3 + docker-socket-proxy) para qualquer VPS.
+Modelo de borda (Traefik v3 + docker-socket-proxy) para qualquer VPS: HTTPS
+automático (Let's Encrypt), peças de segurança reaproveitáveis e um contrato
+simples para plugar sites. Cada site vive no próprio repositório e entra pelo
+[guia de integração](docs/como-plugar-um-projeto.md).
+
+Índice: [Checklist da VPS](#checklist-da-vps) ·
+[Subir a pilha](#subir-a-pilha) ·
+[Fixar e atualizar a versão do Traefik](#fixar-e-atualizar-a-versão-do-traefik) ·
+[Plugar um site](docs/como-plugar-um-projeto.md) ·
+[Painel e métricas](#painel-e-métricas-via-túnel-ssh) ·
+[Certificados](#certificados-lets-encrypt) ·
+[Próximos passos](#próximos-passos)
+
+## Checklist da VPS
+
+Faça uma vez por servidor (Debian/Ubuntu; ajuste ao seu sistema).
+
+1. **Instalar o Docker** (Engine + plugin Compose), pelo repositório oficial:
+   <https://docs.docker.com/engine/install/>. Confira com
+   `docker compose version`. Adicione seu usuário ao grupo `docker`
+   (`sudo usermod -aG docker $USER`, e entre de novo na sessão).
+2. **Firewall com só 22, 80 e 443** (exemplo com `ufw`; o 22 primeiro, para
+   não se trancar para fora):
+   ```bash
+   sudo ufw default deny incoming
+   sudo ufw default allow outgoing
+   sudo ufw allow 22/tcp
+   sudo ufw allow 80/tcp
+   sudo ufw allow 443/tcp
+   sudo ufw enable
+   ```
+   Atenção: portas publicadas pelo Docker passam por cima do `ufw`. Por isso
+   nenhum site pode ter `ports:` (veja o guia), e o painel/métricas são
+   publicados só em `127.0.0.1`. Se o provedor tiver firewall de rede
+   (security group), libere lá as mesmas três portas.
+3. **Criar a rede `proxy`** (externa, compartilhada por Traefik e sites):
+   ```bash
+   docker network create proxy
+   ```
+4. **Estrutura de pastas**:
+   ```
+   /opt/traefik          este repositório (a borda)
+   /opt/apps/<projeto>   um por site: só docker-compose.yml e .env
+   ```
+   ```bash
+   sudo mkdir -p /opt/traefik /opt/apps
+   sudo chown "$USER": /opt/traefik /opt/apps
+   ```
+5. **DNS**: aponte os registros A do domínio (e do `www`) para o IP da VPS.
+   Na Cloudflare comece em "só DNS" (nuvem cinza).
+
+## Subir a pilha
+
+```bash
+git clone <url-deste-repositório> /opt/traefik
+cd /opt/traefik
+cp .env.example .env
+chmod 600 .env
+$EDITOR .env          # ACME_AMBIENTE, ACME_EMAIL, CF_DNS_API_TOKEN (se usar le-dns)
+docker compose up -d
+docker compose ps     # traefik e socket-proxy devem estar (healthy)
+docker compose logs traefik | grep iniciar.sh   # confirma o ambiente ACME
+```
+
+Comece sempre em `ACME_AMBIENTE=staging` (o padrão). A virada para produção é
+trocar só essa variável e rodar
+`docker compose up -d --force-recreate traefik`; veja o
+[checklist de emissão](#checklist-manual-de-emissão-real).
+
+Depois, plugue cada site seguindo o
+[guia de integração](docs/como-plugar-um-projeto.md). Verificação rápida sem
+subir nada: `docker compose config -q`.
+
+## Fixar e atualizar a versão do Traefik
+
+As imagens estão **fixadas** em `docker-compose.yml` (`traefik:v3.x.y`,
+`tecnativa/docker-socket-proxy:vX.Y.Z`), nunca `latest`: nada muda sozinho.
+
+Para atualizar, de propósito:
+
+1. Leia as notas de versão do Traefik
+   (<https://github.com/traefik/traefik/releases>), sobretudo em mudança de
+   versão maior/menor.
+2. Teste antes: no seu computador, troque a tag e rode `testes/smoke.sh`
+   (usa as portas 80/443 da máquina; não rode na VPS com a pilha de pé).
+3. Na VPS, troque a tag em `docker-compose.yml` (commit + pull, ou edição
+   direta) e então:
+   ```bash
+   docker compose pull
+   docker compose up -d
+   docker compose ps && docker compose logs --tail 50 traefik
+   ```
+4. Para voltar atrás, restaure a tag anterior e repita o `up -d`. Faça
+   backup de `acme/` antes de atualizar.
+
+Os arquivos de `acme/` e o `.env` ficam fora do controle de versão e
+sobrevivem à troca de imagem.
 
 ## Painel e métricas via túnel SSH
 
@@ -274,3 +370,22 @@ CNAME não pode sumir); o token precisa de acesso à zona que recebe a
 delegação; e um vazamento dele permitiria emitir certificados para o domínio
 delegado. Por isso fica só como estudo: o modelo usa HTTP-01 para esses
 domínios.
+
+## Próximos passos
+
+Fora do escopo desta base, na ordem natural de estudo:
+
+1. **Nuvem laranja da Cloudflare (proxy).** Os registros começam em "só DNS"
+   (nuvem cinza), para o Traefik emitir certificados sem surpresa. Com tudo
+   funcionando, ligar a nuvem laranja traz cache e proteção, mas exige: modo
+   SSL/TLS "Full (strict)" na Cloudflare, confiar nos IPs da Cloudflare no
+   Traefik (`forwardedHeaders.trustedIPs`, para o IP real do visitante nos
+   logs) e lembrar que o desafio HTTP-01 só funciona se a porta 80 chegar ao
+   Traefik. Vira uma issue quando o repositório for publicado.
+2. **Grafana + Prometheus.** As métricas já estão ligadas em
+   `http://traefik:8082/metrics` (rede `proxy`) e em `127.0.0.1:8082` (túnel
+   SSH). Basta subir um Prometheus na rede `proxy` apontando para esse
+   endereço e um Grafana lendo dele, sem publicar portas (acesso por túnel
+   SSH).
+3. Ler o [estudo de delegação DNS-01 por CNAME](#estudo-extra-delegação-do-dns-01-por-cname)
+   para domínios sem API.

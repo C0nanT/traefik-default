@@ -1,8 +1,13 @@
 # Exemplo de site plugado na borda: o app de teste traefik/whoami.
 #
 # Este é o compose usado pelo smoke test (testes/smoke.sh) e será o exemplo
-# do guia "como plugar um projeto". Na VPS, um site fica em
+# do guia (docs/como-plugar-um-projeto.md). Na VPS, um site fica em
 # /opt/apps/<projeto>/ com só este arquivo e um .env.
+#
+# Exceção consciente: a imagem traefik/whoami é "scratch" (sem shell, sem
+# wget), então não dá para rodar um healthcheck dentro dela. Por isso o bloco
+# "healthcheck" abaixo está COMENTADO. Em sites reais ele é OBRIGATÓRIO:
+# descomente e adapte. O restante do arquivo é idêntico ao que o guia manda.
 #
 # Variáveis (.env do site):
 #   DOMINIO  domínio do site, ex.: exemplo.com
@@ -19,6 +24,13 @@ services:
       - "80"
     networks:
       - proxy
+    # healthcheck:                       # OBRIGATÓRIO em sites reais
+    #   test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
+    #   # (ou curl, ou o binário do próprio app; use um endpoint de saúde)
+    #   interval: 30s
+    #   timeout: 5s
+    #   retries: 3
+    #   start_period: 10s
     labels:
       # Sem esta label o Traefik ignora o container (exposedByDefault=false).
       - "traefik.enable=true"
@@ -37,6 +49,16 @@ services:
       - "traefik.http.routers.whoami-www.middlewares=www-para-raiz@file"
       # O redirect não chega ao app, mas todo router precisa de um serviço.
       - "traefik.http.routers.whoami-www.service=whoami"
+      # Certificado (emissor): sem certresolver, o Traefik serve o certificado
+      # padrão dele, o que basta para o smoke test (domínio fictício). Em sites
+      # reais, escolha UM emissor (detalhes e variantes no guia):
+      #   le-dns  (domínio na Cloudflare, curinga):
+      # - "traefik.http.routers.whoami.tls.certresolver=le-dns"
+      # - "traefik.http.routers.whoami.tls.domains[0].main=${DOMINIO}"
+      # - "traefik.http.routers.whoami.tls.domains[0].sans=*.${DOMINIO}"
+      #   le-http (DNS sem API, nomes exatos; o router www também pede):
+      # - "traefik.http.routers.whoami.tls.certresolver=le-http"
+      # - "traefik.http.routers.whoami-www.tls.certresolver=le-http"
       # Porta em que o app escuta dentro do container.
       - "traefik.http.services.whoami.loadbalancer.server.port=80"
 
