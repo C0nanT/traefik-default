@@ -17,7 +17,7 @@ A VPS deixa de construir esse projeto.
 
 Status: ready-for-agent
 
-- [ ] Um push na `main` (depois do CI verde) publica `ghcr.io/<owner>/conan-torres` com as tags `latest` e SHA
+- [x] Um push na `main` (depois do CI verde) publica `ghcr.io/<owner>/conan-torres` com as tags `latest` e SHA
 - [ ] A imagem é privada
 - [x] O endereço de health responde 200 sem depender da senha do leitor
 - [x] O container local fica `healthy` com o healthcheck definido
