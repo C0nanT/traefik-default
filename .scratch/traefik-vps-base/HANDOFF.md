@@ -1,18 +1,21 @@
 # Handoff: modelo base de Traefik para VPS
 
-Última sessão: 2026-10-25. Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
+Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 
 ## Onde parou
 
-A especificação (`SPEC.md`, nesta pasta) está **implementada e testada localmente**. Os 8 tickets estão em `tickets/`. Smoke test final: **79 ok, 0 falhas**. Nada foi enviado ao GitHub e nenhum certificado real foi emitido ainda.
+Última atualização: 2026-10-26. **Os 8 tickets estão `ready-for-human`, sem caixas abertas.**
 
-| Repositório | Branch de trabalho (checked out) | Último commit |
+| Repositório | `main` | GitHub |
 |---|---|---|
-| `~/projects/traefik-default` | `feat/traefik-base` | `78f0add` |
-| `~/projects/bbcontainer` | `feat/traefik-contract` | `bd73acf` |
-| `~/projects/conan-torres` | `feat/traefik-contract` | `244d340` |
+| `traefik-default` | publicado | <https://github.com/C0nanT/traefik-default> (público) |
+| `bbcontainer` | `bd73acf` | imagem privada no GHCR |
+| `conan-torres` | `fb2cef6` | imagem privada no GHCR (`latest` + SHA) |
 
-O `traefik-default` foi transformado em repositório git nesta sessão e ainda não tem remoto (não está no GitHub).
+**VPS (`89.167.30.96`, Hetzner, Ubuntu 24.04)** reconstruída do zero e montada só pelo README: borda em `/opt/traefik` com `ACME_AMBIENTE=producao`; `bbcontainer` e `conan-torres` em `/opt/apps/<projeto>` (`healthy`), certificados de produção emitidos (`le-http` para o bbcontainer, curinga `le-dns` para o conantorres.dev).
+
+- `bbcontainermodular.com`: **no ar** pela VPS (DNS já apontava para ela).
+- `conantorres.dev`: certificado pronto na VPS, mas o DNS ainda aponta para a **Vercel**. Falta trocar os registros na Cloudflare (nuvem cinza).
 
 ## Decisões tomadas (resumo; detalhes na SPEC)
 
@@ -26,37 +29,11 @@ O `traefik-default` foi transformado em repositório git nesta sessão e ainda n
 - **Token da Cloudflare:** precisa de `Zone:Zone:Read` e `Zone:DNS:Edit`, limitadas às zonas escolhidas.
 - **Imagens dos sites:** privadas no GHCR, construídas no CI, nunca na VPS. O deploy é manual (`docker compose pull && up -d`), e o deploy pelo CI via SSH fica como evolução.
 
-## Próximos passos (em ordem sugerida)
+## Próximos passos
 
-1. **Revisar as branches** dos três repositórios e juntar na `main`.
-2. **Publicar o `traefik-default` no GitHub** (público). Depois:
-   - criar a issue "Habilitar proxy da Cloudflare (nuvem laranja)": IPs confiáveis no Traefik, SSL "Full (strict)" e conferência do IP real nos logs;
-   - conferir o link `github.com/c0nant/traefik-default` no README do bbcontainer.
-3. **conan-torres no GitHub:**
-   - fazer o push na `main` e ver o workflow "Build & Push Image" publicar `ghcr.io/c0nant/conan-torres` com as tags `latest` e SHA;
-   - confirmar que o pacote ficou **privado**;
-   - se o Actions estiver como somente leitura, liberar a escrita de pacotes.
-4. **Teste local de DNS-01**, opcional mas recomendado para estudo:
-   - criar o token da Cloudflare;
-   - seguir o roteiro "teste local" do README, com `teste.conantorres.dev` em staging.
-5. **VPS:**
-   - seguir o checklist do README: Docker 28.0 ou mais recente, `ufw` liberando 22/80/443, `docker network create proxy`, pastas `/opt/traefik` e `/opt/apps/<projeto>`;
-   - fazer login no GHCR com um token `read:packages`;
-   - subir primeiro em `staging`, conferir e depois mudar para `producao`.
-6. **Apontar o DNS** dos dois domínios para o IP da VPS. Na Cloudflare, deixar a nuvem **cinza**.
-7. **Fechar os tickets** com as caixas que ficaram abertas (tabela abaixo) e marcar `Status: ready-for-human`.
-
-## Caixas em aberto nos tickets
-
-| Ticket | O que falta | Como resolver |
-|---|---|---|
-| 03 | Certificado DNS-01 real emitido em staging | Passo 4 |
-| 05 | VPS limpa de pé seguindo só o README | Passo 5 |
-| 06 | Push publica a imagem; imagem privada; container `healthy` | Passo 3 |
-| 07 | bbcontainer atrás da pilha: HTTPS, cabeçalhos e redirecionamento do `www` | Passo 5 (ou local, com login no GHCR) |
-| 08 | conan-torres atrás da pilha: HTTPS e redirecionamento do `www` | Passo 5 (ou local, com login no GHCR) |
-
-Os tickets 01, 02 e 04 já estão completos (`ready-for-human`).
+1. **DNS do conantorres.dev** na Cloudflare: `conantorres.dev` A → `89.167.30.96` e `www` (hoje CNAME da Vercel) → A ou CNAME para a raiz, nuvem **cinza**. Depois conferir e desligar o projeto na Vercel.
+2. Issue #1 do `traefik-default`: nuvem laranja (opcional).
+3. Evoluções: deploy pelo CI via SSH; token da Cloudflare por arquivo (`CF_DNS_API_TOKEN_FILE`); refatorar duplicação dos helpers de teste; healthcheck no exemplo do whoami.
 
 ## Como verificar que está tudo certo
 

@@ -23,10 +23,14 @@
 
 **Bloqueado por:** 02: Peças compartilhadas; 03: Emissores de certificado; 04: Logs de acesso e métricas internas
 
-Status: ready-for-agent
+Status: ready-for-human
 
-- [ ] Seguindo só o README, uma VPS limpa fica com a pilha de pé
+- [x] Seguindo só o README, uma VPS limpa fica com a pilha de pé
 - [x] O compose de exemplo do guia é o mesmo do smoke test (sem divergência)
 - [x] O guia explica quando usar `le-dns` e quando usar `le-http`
 - [x] O guia lista os nomes do contrato: `web`, `websecure`, `proxy`, `le-dns`, `le-http` e as peças `@file`
 - [x] A seção "próximos passos" cita a nuvem laranja da Cloudflare e o Grafana
+
+## Verificação manual (2026-10-26)
+
+VPS Hetzner reconstruída (Ubuntu 24.04.4, 2 vCPU, 3,7 GB) e preparada seguindo só o checklist do README: Docker Engine 29.9.2 / Compose v5.6.1 pelo repositório oficial, `ufw` com 22/80/443, rede `proxy`, `/opt/traefik` (git clone) e `/opt/apps/<projeto>`. Borda `healthy` em staging e depois em `producao`; 80 → 301 HTTPS; 8080/8082 fechadas de fora e acessíveis pelo túnel SSH. Nenhum desvio do README foi necessário.

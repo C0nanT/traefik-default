@@ -19,9 +19,13 @@ O fluxo de desenvolvimento local continua funcionando, seja com um compose separ
 
 **Bloqueado por:** 05: README e guia "como plugar um projeto"; 06: conan-torres, imagem no GHCR e healthcheck
 
-Status: ready-for-agent
+Status: ready-for-human
 
 - [x] Sem `ports:` no compose de produção
-- [ ] Atrás da pilha local, o site responde em HTTPS com os cabeçalhos de segurança, e `www` redireciona para o domínio sem `www`
+- [x] Atrás da pilha local, o site responde em HTTPS com os cabeçalhos de segurança, e `www` redireciona para o domínio sem `www`
 - [x] Os dados do leitor (SQLite) sobrevivem a um `down`/`up` e a uma troca de imagem
 - [x] Os segredos vêm do `.env` em `/opt/apps/conan-torres`
+
+## Verificação manual (2026-10-26)
+
+Na VPS (não só localmente), em staging e depois em produção: HTTPS com certificado válido do Let's Encrypt, `curl` sem `-k` verificando a cadeia; HSTS, `nosniff`, `X-Frame-Options: DENY` e `Referrer-Policy` presentes; gzip com `Accept-Encoding`; `www` → domínio sem `www` com 301 preservando caminho e query; container `healthy`.
