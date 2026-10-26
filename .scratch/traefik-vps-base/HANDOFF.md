@@ -8,6 +8,7 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 
 - `bbcontainermodular.com`: **no ar** pela VPS (DNS na Squarespace, já apontava para ela).
 - `conantorres.dev`: **no ar** pela VPS (DNS na Cloudflare trocado em 2026-10-26, nuvem cinza; `www` é CNAME para a raiz).
+- Monitoramento (node exporter, usuário `metricas`, pilha no PC): **pronto no código, ainda não subido na VPS** (veja "O que falta", item 2).
 
 | Repositório | `main` | GitHub |
 |---|---|---|
@@ -35,10 +36,14 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 ## O que falta
 
 **Atenção (data marcada):**
-1. **Token da Cloudflare expira em 26/10/2027.** Depois disso a renovação do curinga `conantorres.dev` (DNS-01) falha. Tire a expiração no painel da Cloudflare ou gere um token novo antes, troque em `/opt/traefik/.env` e rode `docker compose up -d` em `/opt/traefik`. O alerta de validade do certificado (item 2) pega isso se for esquecido.
+1. **Token da Cloudflare expira em 26/10/2027.** Depois disso a renovação do curinga `conantorres.dev` (DNS-01) falha. Tire a expiração no painel da Cloudflare ou gere um token novo antes, troque em `/opt/traefik/.env` e rode `docker compose up -d` em `/opt/traefik`. O alerta de validade do certificado (item 2) pega isso se for esquecido, depois que o monitoramento estiver no ar.
 
-**Próximo (planejado):**
-2. **Prometheus + Grafana** para validade dos certificados, uptime e tráfego. Ponto de partida no README ("Próximos passos"). Métricas já expostas em `traefik:8082/metrics` (rede `proxy`): `traefik_tls_certs_not_after` (por certificado), `traefik_service_requests_total` e durações por serviço, `traefik_entrypoint_*`. Métricas por router não estão ligadas (`addRoutersLabels`). Uptime externo pede um blackbox exporter. Sem publicar portas; acesso por túnel SSH, como o painel.
+**Em andamento:**
+2. **Prometheus + Grafana: feito no código, falta subir na VPS.** O monitoramento ficou no repositório [`homelab-monitoring`](../../../homelab-monitoring), rodando no meu PC (não na VPS). Do lado deste repositório:
+   - **node exporter** (`prom/node-exporter`) na pilha de borda, com a rede do host e escutando só em `127.0.0.1:9100`; nenhum container vizinho o alcança (smoke: `testes/verificacoes/06-node-exporter.sh`).
+   - **Usuário `metricas`** documentado no README ("Monitoramento a partir de outra máquina"): sem shell, sem senha, chave restrita a abrir túnel para `127.0.0.1:8082` e `127.0.0.1:9100`.
+
+   **Ainda não está na VPS.** Falta, à mão: merge do `feature/homelab-monitoring` na `main` e `git push` (o `/opt/traefik` é clone do GitHub), depois `git pull` e `docker compose up -d` em `/opt/traefik`, criar o `metricas`, subir a pilha no PC pelo túnel real, testar o alerta no Telegram e criar os monitores do UptimeRobot. Ordem e checklist em "Colocar no ar" e "Checklist manual" no README do `homelab-monitoring`. Depois disso, marcar este item como concluído.
 
 **Melhorias (quando quiser):**
 3. Issue #1: nuvem laranja da Cloudflare (IPs confiáveis no Traefik, SSL "Full (strict)", IP real nos logs).
@@ -65,7 +70,7 @@ docker ps --format '{{.Names}}: {{.Status}}'
 cd /opt/traefik && docker compose logs --tail 50 traefik
 
 # Painel e métricas (no seu computador; depois abra http://localhost:8080/dashboard/)
-ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 root@<IP da VPS>
+ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 -L 9100:127.0.0.1:9100 root@<IP da VPS>
 ```
 
 - `.env` na VPS (todos `600`, nunca no git): `/opt/traefik/.env` (token CF, e-mail, `ACME_AMBIENTE=producao`), `/opt/apps/bbcontainer/.env`, `/opt/apps/conan-torres/.env` (senha do leitor, ID do livro, `APP_ENV=production`).
@@ -80,13 +85,13 @@ ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 root@<IP da VPS>
   - `conantorres.dev` usa DNS-01 pela Cloudflare, com curinga.
   - `bbcontainermodular.com` usa HTTP-01, porque o DNS fica na Squarespace, que não tem API. Esse DNS não vai ser transferido.
 - **Teste ou produção:** `ACME_AMBIENTE=staging|producao` no `.env` alterna os dois emissores. O `traefik/iniciar.sh` monta o `traefik.yml` na inicialização, porque o Traefik não lê variáveis dentro do YAML.
-- **Painel e métricas:** ficam só em `127.0.0.1`, portas 8080 e 8082, e você acessa por túnel SSH. O painel responde só pela rede `painel`; os containers dos sites recebem 403.
+- **Painel e métricas:** ficam só em `127.0.0.1`, portas 8080 e 8082 (Traefik) e 9100 (node exporter), e você acessa por túnel SSH. O monitoramento remoto usa o usuário `metricas`, que só abre túnel para 8082 e 9100. O painel responde só pela rede `painel`; os containers dos sites recebem 403.
 - **Token da Cloudflare:** precisa de `Zone:Zone:Read` e `Zone:DNS:Edit`, limitadas às zonas escolhidas.
 - **Imagens dos sites:** privadas no GHCR, construídas no CI, nunca na VPS. O deploy é `docker compose pull && up -d`, rodado pelo cron a cada 10 min (ou à mão), e o deploy pelo CI via SSH fica como evolução.
 
 ## Como verificar que está tudo certo
 
-- No `traefik-default`, rodar `bash testes/smoke.sh`. Ele usa as portas 80, 443, 8080 e 8082 do seu computador, então elas precisam estar livres. O resultado esperado é `0 falha(s)`.
+- No `traefik-default`, rodar `bash testes/smoke.sh`. Ele usa as portas 80, 443, 8080, 8082 e 9100 do seu computador, então elas precisam estar livres. O resultado esperado é `0 falha(s)`.
 - `bash testes/docs.sh` confere a documentação.
 
 ## Riscos aceitos e pontos de atenção

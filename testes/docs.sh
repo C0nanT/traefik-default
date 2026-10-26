@@ -13,6 +13,14 @@ tem() { # arquivo padrão descrição
     falhas=$((falhas + 1))
   fi
 }
+nao_tem() { # arquivo padrão descrição
+  if grep -qF -- "$2" "$1" 2>/dev/null; then
+    echo "FALHA $3 ($1 ainda tem: $2)"
+    falhas=$((falhas + 1))
+  else
+    echo "ok    $3"
+  fi
+}
 G=docs/como-plugar-um-projeto.md
 for n in web websecure proxy le-dns le-http 'seguranca@file' 'compressao@file' 'www-para-raiz@file'; do
   tem $G "$n" "guia lista $n"
@@ -46,4 +54,12 @@ tem README.md 'AllowTcpForwarding' "README: conferir AllowTcpForwarding do sshd"
 tem README.md 'sshd -T' "README: conferir a config efetiva do sshd"
 tem README.md 'administratively prohibited' "README: teste manual da porta recusada"
 tem README.md '../homelab-monitoring' "README linka o homelab-monitoring"
+H=.scratch/traefik-vps-base/HANDOFF.md
+nao_tem README.md 'Basta subir um Prometheus na rede' "próximos passos sem o plano antigo do Prometheus na rede proxy"
+tem README.md '../homelab-monitoring#colocar-no-ar' "próximos passos aponta para colocar no ar do homelab-monitoring"
+tem $H 'node exporter' "HANDOFF registra o node exporter"
+tem $H 'metricas' "HANDOFF registra o usuário metricas"
+tem $H 'feito no código, falta subir na VPS' "HANDOFF: item 2 feito no código, pendente na VPS"
+tem $H 'merge do `feature/homelab-monitoring` na `main`' "HANDOFF: publicar no GitHub antes do git pull na VPS"
+tem $H '127.0.0.1:9100' "HANDOFF cita a porta 9100 no loopback"
 exit $((falhas > 0))
