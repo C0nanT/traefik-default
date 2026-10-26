@@ -81,6 +81,62 @@ ping:
   entryPoint: traefik
 
 # ---------------------------------------------------------------------------
+# Emissores de certificado (certResolvers) do Let's Encrypt via ACME.
+# Os nomes "le-dns" e "le-http" fazem parte do contrato: cada site escolhe
+# um deles por label (traefik.http.routers.<nome>.tls.certresolver=...).
+#
+# MARCADORES __ACME_...__: o YAML não lê variáveis de ambiente, então o
+# traefik/iniciar.sh troca estes marcadores pelos valores do .env antes de
+# iniciar o Traefik (veja o comentário no topo daquele script):
+#   __ACME_CA_SERVER__  URL do servidor ACME, derivada de ACME_AMBIENTE
+#   __ACME_AMBIENTE__   "staging" ou "producao"
+#   __ACME_EMAIL__      ACME_EMAIL (opcional)
+# Assim UMA variável (ACME_AMBIENTE) muda os dois emissores de uma vez.
+#
+# Armazenamento: um arquivo por emissor E por ambiente, em /acme (diretório
+# ./acme do host, montado no docker-compose.yml). O Traefik cria o arquivo
+# com permissão 600. Separar por ambiente evita a armadilha clássica: ao
+# virar para produção, um arquivo antigo com certificados de STAGING
+# continuaria sendo servido até vencer. Com nomes separados, produção começa
+# limpa, e voltar para staging reaproveita a conta de teste.
+# ---------------------------------------------------------------------------
+certificatesResolvers:
+  # DNS-01 via Cloudflare. Prova o controle do domínio criando um registro
+  # TXT "_acme-challenge.<domínio>" pela API da Cloudflare (com o token
+  # CF_DNS_API_TOKEN do .env) e apagando-o depois. Não precisa de nenhuma
+  # porta aberta e é o ÚNICO desafio que permite curinga (*.dominio).
+  # Sem token configurado o Traefik sobe normalmente; só a emissão por este
+  # emissor falha (com erro no log).
+  le-dns:
+    acme:
+      email: "__ACME_EMAIL__"
+      caServer: "__ACME_CA_SERVER__"
+      storage: "/acme/le-dns-__ACME_AMBIENTE__.json"
+      dnsChallenge:
+        provider: cloudflare
+        # Servidores DNS usados para conferir se o TXT já propagou. Usar os
+        # públicos evita o cache do DNS local (roteador de casa, por exemplo),
+        # que pode atrasar a verificação.
+        resolvers:
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
+
+  # HTTP-01. O Let's Encrypt busca http://<domínio>/.well-known/acme-challenge/
+  # na porta 80, então o domínio precisa apontar para este servidor e a
+  # porta 80 precisa estar aberta. Funciona com qualquer DNS (inclusive sem
+  # API, como a Squarespace), mas NÃO emite curinga: cada nome (dominio,
+  # www.dominio) entra no certificado explicitamente.
+  # O Traefik atende o desafio na entrada "web" antes do redirecionamento
+  # global para HTTPS.
+  le-http:
+    acme:
+      email: "__ACME_EMAIL__"
+      caServer: "__ACME_CA_SERVER__"
+      storage: "/acme/le-http-__ACME_AMBIENTE__.json"
+      httpChallenge:
+        entryPoint: web
+
+# ---------------------------------------------------------------------------
 # Log do próprio Traefik (erros, avisos), na saída padrão do container.
 # Valores: DEBUG, INFO, WARN, ERROR.
 # ---------------------------------------------------------------------------

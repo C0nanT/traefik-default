@@ -22,11 +22,28 @@ services:
       # 8080 do container, que NÃO é publicada.
       - "80:80"
       - "443:443"
+    # O traefik/iniciar.sh preenche os valores ACME do .env na configuração
+    # estática e depois executa o Traefik (o YAML não lê variáveis; veja o
+    # comentário no topo do script).
+    entrypoint: ["/bin/sh", "/etc/traefik/iniciar.sh"]
+    environment:
+      # staging (padrão) ou producao: vale para os DOIS emissores.
+      ACME_AMBIENTE: ${ACME_AMBIENTE:-staging}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+      # Token da Cloudflare para o DNS-01 (le-dns). Lido direto pelo Traefik.
+      # Vazio = a pilha sobe igual; só a emissão via le-dns falha.
+      CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN:-}
     volumes:
-      # Configuração estática, só leitura. Fica no caminho padrão
-      # (/etc/traefik/traefik.yml), que também é onde o comando
-      # "traefik healthcheck" procura a configuração.
-      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      # Configuração estática, só leitura. É um MODELO: o iniciar.sh gera a
+      # versão final no caminho padrão (/etc/traefik/traefik.yml), que também
+      # é onde o comando "traefik healthcheck" procura a configuração.
+      - ./traefik/traefik.yml:/etc/traefik/modelo/traefik.yml:ro
+      - ./traefik/iniciar.sh:/etc/traefik/iniciar.sh:ro
+      # Certificados e contas ACME (um .json por emissor e ambiente, com
+      # permissão 600). Diretório do HOST, não volume nomeado: sobrevive a
+      # "docker compose down -v" e à recriação do container, e fica fácil de
+      # fazer backup. O Docker cria ./acme se não existir (clone novo).
+      - ./acme:/acme
       # Repare: o socket do Docker NÃO é montado aqui.
     networks:
       - proxy    # onde estão os sites
