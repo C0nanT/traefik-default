@@ -15,10 +15,10 @@ A VPS deixa de construir esse projeto.
 
 **Bloqueado por:** nenhum (pode começar já)
 
-Status: ready-for-agent
+Status: ready-for-human
 
 - [x] Um push na `main` (depois do CI verde) publica `ghcr.io/<owner>/conan-torres` com as tags `latest` e SHA
-- [ ] A imagem é privada
+- [x] A imagem é privada
 - [x] O endereço de health responde 200 sem depender da senha do leitor
 - [x] O container local fica `healthy` com o healthcheck definido
 - [x] Os segredos (`READER_PASSWORD` etc.) continuam vindo só de variáveis de ambiente em runtime, nunca embutidos na imagem
