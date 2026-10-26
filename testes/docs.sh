@@ -35,4 +35,7 @@ tem README.md 'docs/como-plugar-um-projeto.md' "README linka o guia"
 tem README.md 'Zone / Zone / Read' "README: escopo do token"
 tem .env.example 'Zone / Zone / Read' ".env.example: escopo do token"
 tem $G 'Zone / Zone / Read' "guia: escopo do token"
+tem README.md '127.0.0.1:9100' "README cita a porta 9100 no loopback"
+tem README.md '-L 9100:127.0.0.1:9100' "README: túnel para a 9100"
+tem README.md 'prom/node-exporter:vX.Y.Z' "README: roteiro de versão cobre o node exporter"
 exit $((falhas > 0))

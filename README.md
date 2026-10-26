@@ -95,8 +95,8 @@ subir nada: `docker compose config -q`.
 As imagens estão **fixadas**, nunca `latest`: nada muda sozinho. Cada tag
 aparece em um único arquivo:
 
-- `docker-compose.yml`: `traefik:v3.x.y` e
-  `tecnativa/docker-socket-proxy:vX.Y.Z`;
+- `docker-compose.yml`: `traefik:v3.x.y`,
+  `tecnativa/docker-socket-proxy:vX.Y.Z` e `prom/node-exporter:vX.Y.Z`;
 - `exemplos/whoami/docker-compose.yml`: `traefik/whoami:vX.Y.Z` (app de
   exemplo e do smoke test).
 
@@ -107,16 +107,19 @@ Para atualizar, de propósito:
 
 1. Leia as notas de versão do Traefik
    (<https://github.com/traefik/traefik/releases>), sobretudo em mudança de
-   versão maior/menor.
+   versão maior/menor. Para o node exporter, as de
+   <https://github.com/prometheus/node_exporter/releases> (nomes de métricas
+   podem mudar e quebrar painéis/alertas do Grafana).
 2. Teste antes: no seu computador, troque a tag em `docker-compose.yml`
    (só ali) e rode `testes/smoke.sh` (usa as portas 80/443 e
-   127.0.0.1:8080/8082 da máquina; não rode na VPS com a pilha de pé).
+   127.0.0.1:8080/8082/9100 da máquina; não rode na VPS com a pilha de pé).
 3. Na VPS, troque a tag em `docker-compose.yml` (commit + pull, ou edição
    direta) e então:
    ```bash
    docker compose pull
    docker compose up -d
    docker compose ps && docker compose logs --tail 50 traefik
+   docker compose logs --tail 50 node-exporter   # se trocou essa tag
    ```
 4. Para voltar atrás, restaure a tag anterior e repita o `up -d`. Faça
    backup de `acme/` antes de atualizar.
@@ -126,23 +129,25 @@ sobrevivem à troca de imagem.
 
 ## Painel e métricas via túnel SSH
 
-O painel/API do Traefik (porta 8080) e as métricas Prometheus (porta 8082)
-**não** são acessíveis pela internet: nunca respondem em 80/443. O
-`docker-compose.yml` publica essas duas portas apenas no loopback da VPS
-(`127.0.0.1:8080` e `127.0.0.1:8082`), então só se chega a elas de dentro do
+O painel/API do Traefik (porta 8080), as métricas Prometheus do Traefik
+(porta 8082) e as do host, pelo node exporter (porta 9100), **não** são
+acessíveis pela internet: nunca respondem em 80/443. O `docker-compose.yml`
+publica essas três portas apenas no loopback da VPS (`127.0.0.1:8080`,
+`127.0.0.1:8082` e `127.0.0.1:9100`), então só se chega a elas de dentro do
 servidor, por um túnel SSH.
 
 No seu computador:
 
 ```bash
-ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 usuario@IP_DA_VPS
+ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 -L 9100:127.0.0.1:9100 usuario@IP_DA_VPS
 ```
 
 Com o túnel aberto, no seu navegador/terminal:
 
 - Painel: <http://localhost:8080/dashboard/> (a barra final é obrigatória)
 - API: <http://localhost:8080/api/overview>
-- Métricas: <http://localhost:8082/metrics>
+- Métricas do Traefik: <http://localhost:8082/metrics>
+- Métricas do host (node exporter): <http://localhost:9100/metrics>
 
 Se a porta local já estiver em uso, troque o primeiro número
 (ex.: `-L 9090:127.0.0.1:8080`). Feche o túnel com `Ctrl+C`.
@@ -159,7 +164,11 @@ smoke test confere isso (`testes/verificacoes/05-painel.sh`).
 
 As métricas são outra história, de propósito: containers na rede `proxy`
 (ex.: um Prometheus futuro) alcançam `http://traefik:8082/metrics`, sem passar
-pelo host.
+pelo host. Já o node exporter não: ele usa a rede do host
+(`network_mode: host`), fora da rede `proxy`, e escuta só em
+`127.0.0.1:9100`. Nenhum container vizinho o alcança, nem pelo gateway da
+rede `proxy`; o smoke test confere isso
+(`testes/verificacoes/06-node-exporter.sh`).
 
 ### Logs de acesso
 
