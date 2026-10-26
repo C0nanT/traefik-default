@@ -18,10 +18,14 @@ services:
       socket-proxy:
         condition: service_healthy
     ports:
-      # Únicas portas publicadas no host. Painel/API e ping ficam na porta
-      # 8080 do container, que NÃO é publicada.
+      # Únicas portas públicas: 80 e 443.
       - "80:80"
       - "443:443"
+      # Painel/API (8080) e métricas (8082): publicados SÓ no loopback da VPS
+      # (127.0.0.1), nunca em interface pública. Acesso por túnel SSH
+      # (ssh -L); ver README.
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8082:8082"
     volumes:
       # Configuração estática, só leitura. Fica no caminho padrão
       # (/etc/traefik/traefik.yml), que também é onde o comando
@@ -38,6 +42,13 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    logging:
+      # Rotação dos logs (acesso JSON + Traefik) pelo Docker: no máximo
+      # 5 arquivos de 10 MB.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     security_opt:
       - no-new-privileges:true
 
