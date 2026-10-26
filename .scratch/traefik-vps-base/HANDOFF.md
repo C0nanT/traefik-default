@@ -4,7 +4,7 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 
 ## Onde parou
 
-Última atualização: 2026-10-26. **Projeto em produção. Os 8 tickets estão `ready-for-human`, sem caixas abertas.**
+Última atualização: 2026-10-26. **Projeto em produção e migração fechada. Os 8 tickets estão `ready-for-human`, sem caixas abertas.**
 
 - `bbcontainermodular.com`: **no ar** pela VPS (DNS na Squarespace, já apontava para ela).
 - `conantorres.dev`: **no ar** pela VPS (DNS na Cloudflare trocado em 2026-10-26, nuvem cinza; `www` é CNAME para a raiz).
@@ -29,15 +29,20 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
    - Subida em staging, conferida de fora, e virada para `producao`. Certificados válidos até 24/01/2027 (renovação automática).
 6. **DNS do conantorres.dev** trocado da Vercel para a VPS e conferido (HTTPS, `www`, cabeçalhos, health).
 
+7. **Migração fechada:** domínios removidos da Vercel; token da Cloudflare conferido de dentro da VPS (verify `active`, leitura da zona e do DNS ok, sem bloqueio de IP).
+8. **Atualização automática** por cron versionada em `vps/` e documentada (README, guia, SPEC).
+
 ## O que falta
 
-**Para fechar a migração (rápido):**
-1. **Vercel:** remover `conantorres.dev` e `www.conantorres.dev` do projeto (Settings → Domains). Espere o cache de DNS antigo expirar (~30 min depois da troca).
-2. **Token da Cloudflare:** se ligou o filtro de IP, confira que inclui o IP da VPS (sem ele, a renovação do curinga falha em ~60 dias).
+**Atenção (data marcada):**
+1. **Token da Cloudflare expira em 26/10/2027.** Depois disso a renovação do curinga `conantorres.dev` (DNS-01) falha. Tire a expiração no painel da Cloudflare ou gere um token novo antes, troque em `/opt/traefik/.env` e rode `docker compose up -d` em `/opt/traefik`. O alerta de validade do certificado (item 2) pega isso se for esquecido.
+
+**Próximo (planejado):**
+2. **Prometheus + Grafana** para validade dos certificados, uptime e tráfego. Ponto de partida no README ("Próximos passos"). Métricas já expostas em `traefik:8082/metrics` (rede `proxy`): `traefik_tls_certs_not_after` (por certificado), `traefik_service_requests_total` e durações por serviço, `traefik_entrypoint_*`. Métricas por router não estão ligadas (`addRoutersLabels`). Uptime externo pede um blackbox exporter. Sem publicar portas; acesso por túnel SSH, como o painel.
 
 **Melhorias (quando quiser):**
 3. Issue #1: nuvem laranja da Cloudflare (IPs confiáveis no Traefik, SSL "Full (strict)", IP real nos logs).
-4. Deploy pelo CI via SSH (hoje é manual, ver "Operação na VPS").
+4. Deploy pelo CI via SSH (hoje o cron cobre, com atraso de até 10 min e erro só no log da VPS).
 5. Token da Cloudflare por arquivo (`CF_DNS_API_TOKEN_FILE`) em vez de variável de ambiente.
 6. Backup do volume `conan-torres_leitor-data` (SQLite do leitor) e de `/opt/traefik/acme/`.
 7. Limpeza de código apontada na revisão (não bloqueante):
@@ -49,8 +54,10 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 
 Acesso: `ssh root@<IP da VPS>` (chave já configurada neste computador).
 
+**Atualização automática:** cron a cada 10 min (`/etc/cron.d/atualizar-apps`) roda `/usr/local/bin/atualizar-apps.sh` (fontes em `vps/`, instalação no README), que faz `docker compose pull && up -d` em cada `/opt/apps/*/` e `docker image prune -f`. Log só de mudanças e erros em `/var/log/atualizar-apps.log` (logrotate semanal). Ou seja: push na `main` → no ar em até ~10 min depois do CI.
+
 ```bash
-# Atualizar um site depois de um push na main (o CI já publicou a imagem)
+# Atualizar um site na hora, sem esperar o cron
 cd /opt/apps/<projeto> && docker compose pull && docker compose up -d && docker compose ps
 
 # Estado geral
@@ -75,7 +82,7 @@ ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 root@<IP da VPS>
 - **Teste ou produção:** `ACME_AMBIENTE=staging|producao` no `.env` alterna os dois emissores. O `traefik/iniciar.sh` monta o `traefik.yml` na inicialização, porque o Traefik não lê variáveis dentro do YAML.
 - **Painel e métricas:** ficam só em `127.0.0.1`, portas 8080 e 8082, e você acessa por túnel SSH. O painel responde só pela rede `painel`; os containers dos sites recebem 403.
 - **Token da Cloudflare:** precisa de `Zone:Zone:Read` e `Zone:DNS:Edit`, limitadas às zonas escolhidas.
-- **Imagens dos sites:** privadas no GHCR, construídas no CI, nunca na VPS. O deploy é manual (`docker compose pull && up -d`), e o deploy pelo CI via SSH fica como evolução.
+- **Imagens dos sites:** privadas no GHCR, construídas no CI, nunca na VPS. O deploy é `docker compose pull && up -d`, rodado pelo cron a cada 10 min (ou à mão), e o deploy pelo CI via SSH fica como evolução.
 
 ## Como verificar que está tudo certo
 

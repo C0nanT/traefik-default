@@ -54,6 +54,19 @@ Faça uma vez por servidor (Debian/Ubuntu; ajuste ao seu sistema).
    ```
 5. **DNS**: aponte os registros A do domínio (e do `www`) para o IP da VPS.
    Na Cloudflare comece em "só DNS" (nuvem cinza).
+6. **Atualização automática dos sites** (cron a cada 10 min). O script
+   `vps/atualizar-apps.sh` roda `docker compose pull && up -d` em cada
+   `/opt/apps/*/` (só recria o que mudou) e limpa imagens antigas. Push na
+   `main` de um site → no ar em até ~10 min depois do CI. Log só de mudanças
+   e erros em `/var/log/atualizar-apps.log`, com rotação semanal:
+   ```bash
+   sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh /usr/local/bin/atualizar-apps.sh
+   sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron /etc/cron.d/atualizar-apps
+   sudo install -m 644 /opt/traefik/vps/atualizar-apps.logrotate /etc/logrotate.d/atualizar-apps
+   ```
+   Rode como `root` (o cron usa o `docker login ghcr.io` de `/root`). Para
+   atualizar na hora, sem esperar: `cd /opt/apps/<projeto> && docker compose
+   pull && docker compose up -d`.
 
 ## Subir a pilha
 
@@ -398,6 +411,9 @@ Fora do escopo desta base, na ordem natural de estudo:
    `http://traefik:8082/metrics` (rede `proxy`) e em `127.0.0.1:8082` (túnel
    SSH). Basta subir um Prometheus na rede `proxy` apontando para esse
    endereço e um Grafana lendo dele, sem publicar portas (acesso por túnel
-   SSH).
+   SSH). Painéis úteis: validade dos certificados
+   (`traefik_tls_certs_not_after`, alertar com menos de 20 dias), requisições
+   e erros 5xx por serviço (`traefik_service_requests_total`), e uptime dos sites (blackbox exporter batendo nos
+   domínios por HTTPS).
 3. Ler o [estudo de delegação DNS-01 por CNAME](#estudo-extra-delegação-do-dns-01-por-cname)
    para domínios sem API.

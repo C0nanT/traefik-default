@@ -106,7 +106,7 @@ Antes de ir para a VPS, ajusto bbcontainer e conan-torres para o novo contrato. 
 - Healthcheck obrigatório.
 - Labels: `traefik.enable=true`, rede `proxy`, porta do serviço, router em `websecure` com o emissor adequado e as peças compartilhadas; router de `www` com o redirect compartilhado.
 - Arquivos do site na VPS: `/opt/apps/<projeto>` com só `docker-compose.yml` e `.env`.
-- Deploy: manual (`docker compose pull && docker compose up -d`) agora; deploy via GitHub Actions por SSH documentado como evolução. Watchtower descartado (arquivado).
+- Deploy: `docker compose pull && docker compose up -d`, rodado por um cron na VPS a cada 10 min (`vps/atualizar-apps.sh`, adicionado depois da entrega) ou à mão; deploy via GitHub Actions por SSH documentado como evolução. Watchtower descartado (arquivado).
 
 **Ajustes nos projetos existentes (antes da VPS)**
 - bbcontainer: rede `traefik`→`proxy`; emissor →`le-http`; remover labels próprias de HTTP→HTTPS e de regex www; usar peças compartilhadas; manter healthcheck e imagem GHCR existentes.
@@ -128,7 +128,7 @@ Antes de ir para a VPS, ajusto bbcontainer e conan-torres para o novo contrato. 
 - Delegação DNS-01 por CNAME para domínios sem API — só documentada como estudo.
 - Transferir o DNS do `bbcontainermodular.com`.
 - Automação de provisionamento da VPS (Ansible, scripts).
-- Deploy automatizado dos sites via CI (só documentado como evolução).
+- Deploy dos sites disparado pelo CI (só documentado como evolução; o cron de `pull` na VPS cobre o automático).
 - Rate limiting, HTTP/3, autenticação no painel.
 
 ## Further Notes
