@@ -1,4 +1,3 @@
-.scratch/
 .env
 acme.json
 # Certificados ACME (chaves privadas!): nunca versionar.
