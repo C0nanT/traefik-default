@@ -135,7 +135,7 @@ arquivado).
 
 - [ ] Imagem no GHCR; `docker login ghcr.io` feito na VPS
 - [ ] Sem `ports:`; rede `proxy` externa
-- [ ] `healthcheck` presente
+- [ ] `healthcheck` presente (no compose ou `HEALTHCHECK` da imagem)
 - [ ] `traefik.enable=true`, `entrypoints=websecure`, `middlewares` com as peças
 - [ ] Emissor certo para o DNS (`le-dns` ou `le-http`) e router `-www`
 - [ ] Nome do router único na VPS
