@@ -44,6 +44,12 @@ entryPoints:
   traefik:
     address: ":8080"
 
+  # Entrada interna "metricas" (porta 8082): só as métricas Prometheus.
+  # Publicada apenas em 127.0.0.1 (túnel SSH); visível aos containers na
+  # rede interna (futuro Grafana/Prometheus).
+  metricas:
+    address: ":8082"
+
 # ---------------------------------------------------------------------------
 # Provedores: de onde o Traefik descobre rotas e serviços.
 # ---------------------------------------------------------------------------
@@ -63,15 +69,22 @@ providers:
     # Esta opção diz por qual rede ele deve alcançar os sites.
     network: proxy
 
+  file:
+    # Peças reaproveitáveis (middlewares e opções TLS): ver traefik/dynamic/.
+    # Montado em /etc/traefik/dynamic pelo docker-compose.yml. "watch" faz o
+    # Traefik reler os arquivos quando mudam, sem reiniciar.
+    directory: /etc/traefik/dynamic
+    watch: true
+
 # ---------------------------------------------------------------------------
 # Painel e API.
-# Habilitados, mas NÃO roteados publicamente: não existe router para
-# "api@internal" e "insecure" está desligado, então nada responde em 80/443.
-# O acesso será por túnel SSH (documentado no README).
+# "insecure: true" serve painel e API na entrada interna "traefik" (:8080),
+# que só é publicada em 127.0.0.1 da VPS (acesso por túnel SSH, ver README).
+# Não existe router para "api@internal", então nada responde em 80/443.
 # ---------------------------------------------------------------------------
 api:
   dashboard: true
-  insecure: false
+  insecure: true
 
 # ---------------------------------------------------------------------------
 # Ping: endpoint /ping na entrada interna "traefik", usado pelo healthcheck
@@ -147,3 +160,17 @@ log:
 global:
   checkNewVersion: false
   sendAnonymousUsage: false
+
+# ---------------------------------------------------------------------------
+# Log de acesso em JSON, na saída padrão do container (o driver de log do
+# Docker faz a rotação; ver "logging" no docker-compose.yml).
+# ---------------------------------------------------------------------------
+accessLog:
+  format: json
+
+# ---------------------------------------------------------------------------
+# Métricas Prometheus, na entrada interna "metricas" (/metrics).
+# ---------------------------------------------------------------------------
+metrics:
+  prometheus:
+    entryPoint: metricas
