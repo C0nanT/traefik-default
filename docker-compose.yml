@@ -1,0 +1,109 @@
+# Pilha de borda: Traefik + docker-socket-proxy.
+#
+# Na VPS este repositório fica em /opt/traefik. Antes do primeiro "up":
+#   docker network create proxy     # uma vez por servidor
+#   cp .env.example .env            # e preencha
+#   docker compose up -d
+#
+# As versões das imagens são FIXAS (nada de "latest"): atualizar é uma
+# decisão consciente, trocando a tag aqui.
+
+name: traefik
+
+services:
+  traefik:
+    image: traefik:v3.7.16
+    restart: unless-stopped
+    depends_on:
+      socket-proxy:
+        condition: service_healthy
+    ports:
+      # Únicas portas publicadas no host. Painel/API e ping ficam na porta
+      # 8080 do container, que NÃO é publicada.
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Configuração estática, só leitura. Fica no caminho padrão
+      # (/etc/traefik/traefik.yml), que também é onde o comando
+      # "traefik healthcheck" procura a configuração.
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      # Repare: o socket do Docker NÃO é montado aqui.
+    networks:
+      - proxy    # onde estão os sites
+      - socket   # só para falar com o socket-proxy
+    healthcheck:
+      # Usa o endpoint /ping (habilitado em traefik.yml).
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+
+  socket-proxy:
+    # Intermediário entre o Traefik e o Docker: um HAProxy que só repassa os
+    # endpoints liberados abaixo (todos de leitura).
+    # https://github.com/Tecnativa/docker-socket-proxy
+    image: tecnativa/docker-socket-proxy:v0.5.0
+    restart: unless-stopped
+    environment:
+      # 1 = liberado, 0 = bloqueado. Deixamos tudo explícito para estudo.
+      # O que o provedor Docker do Traefik precisa:
+      CONTAINERS: 1   # listar/inspecionar containers (labels, IPs)
+      EVENTS: 1       # ser avisado quando um container sobe/cai
+      VERSION: 1      # negociar a versão da API do Docker
+      PING: 1         # usado pelo healthcheck abaixo
+      # Nenhum método de escrita (POST/PUT/DELETE): só leitura.
+      POST: 0
+      # O resto fica bloqueado.
+      ALLOW_RESTARTS: 0
+      ALLOW_START: 0
+      ALLOW_STOP: 0
+      AUTH: 0
+      BUILD: 0
+      COMMIT: 0
+      CONFIGS: 0
+      DISTRIBUTION: 0
+      EXEC: 0
+      IMAGES: 0
+      INFO: 0
+      NETWORKS: 0
+      NODES: 0
+      PLUGINS: 0
+      SECRETS: 0
+      SERVICES: 0
+      SESSION: 0
+      SWARM: 0
+      SYSTEM: 0
+      TASKS: 0
+      VOLUMES: 0
+    volumes:
+      # Só leitura no nível do arquivo também.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      # SÓ a rede interna. Nunca na rede "proxy": os sites não podem
+      # alcançar a API do Docker.
+      - socket
+    # Nenhuma porta publicada.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:2375/_ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  # Rede compartilhada com os sites. É "externa": criada uma vez no servidor
+  # (docker network create proxy) e usada por este compose e pelo compose de
+  # cada site. O nome "proxy" faz parte do contrato.
+  proxy:
+    external: true
+    name: proxy
+
+  # Rede só entre o Traefik e o socket-proxy. "internal: true" = sem saída
+  # para a internet e sem acesso a partir de outros containers.
+  socket:
+    internal: true

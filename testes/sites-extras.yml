@@ -1,0 +1,15 @@
+# Containers extras usados só pelo smoke test (somados ao exemplo do whoami).
+
+services:
+  # Container na rede "proxy" com uma regra de roteamento completa, mas SEM
+  # "traefik.enable=true". O smoke test confirma que ele não é roteado,
+  # provando que exposedByDefault=false está valendo.
+  sem-label:
+    image: traefik/whoami:v1.12.0
+    networks:
+      - proxy
+    labels:
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.sem-label.rule=Host(`${HOST_SEM_LABEL:?}`)"
+      - "traefik.http.routers.sem-label.entrypoints=websecure"
+      - "traefik.http.services.sem-label.loadbalancer.server.port=80"

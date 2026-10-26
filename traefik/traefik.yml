@@ -1,0 +1,93 @@
+# Configuração ESTÁTICA do Traefik.
+#
+# "Estática" = lida uma única vez quando o Traefik inicia. Aqui ficam as
+# coisas que definem a estrutura da borda: portas de entrada (entryPoints),
+# de onde vêm as rotas (providers), painel/API, healthcheck etc.
+# Mudou algo aqui? Precisa reiniciar o Traefik:
+#   docker compose up -d --force-recreate traefik
+#
+# As rotas dos sites NÃO ficam aqui: elas vêm das labels dos containers
+# (provedor Docker). Peças reaproveitáveis (middlewares, opções TLS) ficam na
+# configuração dinâmica, lida pelo provedor de arquivo.
+#
+# Referência: https://doc.traefik.io/traefik/reference/static-configuration/file/
+
+# ---------------------------------------------------------------------------
+# Entradas (entryPoints): as portas em que o Traefik escuta DENTRO do
+# container. O docker-compose.yml publica 80 e 443 no host.
+# Os nomes "web" e "websecure" fazem parte do contrato com os sites.
+# ---------------------------------------------------------------------------
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      # Redirecionamento GLOBAL de HTTP para HTTPS: qualquer requisição na
+      # porta 80 é mandada para "websecure" com redirecionamento permanente.
+      # Assim os sites não precisam declarar esse redirect nas labels.
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  websecure:
+    address: ":443"
+    http:
+      # Todo router nesta entrada usa TLS por padrão, sem precisar da label
+      # "tls=true" em cada site. Enquanto nenhum emissor (certResolver)
+      # estiver configurado, o Traefik usa o próprio certificado padrão
+      # autoassinado ("TRAEFIK DEFAULT CERT").
+      tls: {}
+
+  # Entrada interna "traefik" (porta 8080): usada pelo ping (healthcheck) e
+  # pelo painel/API. NÃO é publicada no host pelo docker-compose.yml.
+  traefik:
+    address: ":8080"
+
+# ---------------------------------------------------------------------------
+# Provedores: de onde o Traefik descobre rotas e serviços.
+# ---------------------------------------------------------------------------
+providers:
+  docker:
+    # O Traefik NÃO monta /var/run/docker.sock. Ele fala com o
+    # docker-socket-proxy, que só libera endpoints de leitura da API do
+    # Docker. Se o Traefik for comprometido, o atacante não ganha controle
+    # do Docker (e portanto do servidor).
+    endpoint: "tcp://socket-proxy:2375"
+
+    # Nenhum container é publicado sem pedir: só entra no Traefik quem tiver
+    # a label "traefik.enable=true".
+    exposedByDefault: false
+
+    # O Traefik está em duas redes (proxy e a rede interna do socket-proxy).
+    # Esta opção diz por qual rede ele deve alcançar os sites.
+    network: proxy
+
+# ---------------------------------------------------------------------------
+# Painel e API.
+# Habilitados, mas NÃO roteados publicamente: não existe router para
+# "api@internal" e "insecure" está desligado, então nada responde em 80/443.
+# O acesso será por túnel SSH (documentado no README).
+# ---------------------------------------------------------------------------
+api:
+  dashboard: true
+  insecure: false
+
+# ---------------------------------------------------------------------------
+# Ping: endpoint /ping na entrada interna "traefik", usado pelo healthcheck
+# do container ("traefik healthcheck --ping").
+# ---------------------------------------------------------------------------
+ping:
+  entryPoint: traefik
+
+# ---------------------------------------------------------------------------
+# Log do próprio Traefik (erros, avisos), na saída padrão do container.
+# Valores: DEBUG, INFO, WARN, ERROR.
+# ---------------------------------------------------------------------------
+log:
+  level: INFO
+
+# Não envia dados anônimos de uso nem verifica novas versões.
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
