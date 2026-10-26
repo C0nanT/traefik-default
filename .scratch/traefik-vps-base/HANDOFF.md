@@ -12,7 +12,7 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 | `bbcontainer` | `bd73acf` | imagem privada no GHCR |
 | `conan-torres` | `fb2cef6` | imagem privada no GHCR (`latest` + SHA) |
 
-**VPS (`89.167.30.96`, Hetzner, Ubuntu 24.04)** reconstruída do zero e montada só pelo README: borda em `/opt/traefik` com `ACME_AMBIENTE=producao`; `bbcontainer` e `conan-torres` em `/opt/apps/<projeto>` (`healthy`), certificados de produção emitidos (`le-http` para o bbcontainer, curinga `le-dns` para o conantorres.dev).
+**VPS (Hetzner, Ubuntu 24.04; IP fora do repositório)** reconstruída do zero e montada só pelo README: borda em `/opt/traefik` com `ACME_AMBIENTE=producao`; `bbcontainer` e `conan-torres` em `/opt/apps/<projeto>` (`healthy`), certificados de produção emitidos (`le-http` para o bbcontainer, curinga `le-dns` para o conantorres.dev).
 
 - `bbcontainermodular.com`: **no ar** pela VPS (DNS já apontava para ela).
 - `conantorres.dev`: certificado pronto na VPS, mas o DNS ainda aponta para a **Vercel**. Falta trocar os registros na Cloudflare (nuvem cinza).
@@ -31,7 +31,7 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 
 ## Próximos passos
 
-1. **DNS do conantorres.dev** na Cloudflare: `conantorres.dev` A → `89.167.30.96` e `www` (hoje CNAME da Vercel) → A ou CNAME para a raiz, nuvem **cinza**. Depois conferir e desligar o projeto na Vercel.
+1. **DNS do conantorres.dev** na Cloudflare: `conantorres.dev` A → IP da VPS e `www` (hoje CNAME da Vercel) → A ou CNAME para a raiz, nuvem **cinza**. Depois conferir e desligar o projeto na Vercel.
 2. Issue #1 do `traefik-default`: nuvem laranja (opcional).
 3. Evoluções: deploy pelo CI via SSH; token da Cloudflare por arquivo (`CF_DNS_API_TOKEN_FILE`); refatorar duplicação dos helpers de teste; healthcheck no exemplo do whoami.
 
