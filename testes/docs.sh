@@ -60,5 +60,6 @@ tem README.md '../homelab-monitoring#colocar-no-ar' "próximos passos aponta par
 tem $H 'node exporter' "HANDOFF registra o node exporter"
 tem $H 'metricas' "HANDOFF registra o usuário metricas"
 tem $H 'feito no código, falta subir na VPS' "HANDOFF: item 2 feito no código, pendente na VPS"
+tem $H 'merge do `feature/homelab-monitoring` na `main`' "HANDOFF: publicar no GitHub antes do git pull na VPS"
 tem $H '127.0.0.1:9100' "HANDOFF cita a porta 9100 no loopback"
 exit $((falhas > 0))

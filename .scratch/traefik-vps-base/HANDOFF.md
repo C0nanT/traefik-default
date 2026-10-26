@@ -43,7 +43,7 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
    - **node exporter** (`prom/node-exporter`) na pilha de borda, com a rede do host e escutando só em `127.0.0.1:9100`; nenhum container vizinho o alcança (smoke: `testes/verificacoes/06-node-exporter.sh`).
    - **Usuário `metricas`** documentado no README ("Monitoramento a partir de outra máquina"): sem shell, sem senha, chave restrita a abrir túnel para `127.0.0.1:8082` e `127.0.0.1:9100`.
 
-   **Ainda não está na VPS.** Falta, à mão: `git pull` e `docker compose up -d` em `/opt/traefik`, criar o `metricas`, subir a pilha no PC pelo túnel real, testar o alerta no Telegram e criar os monitores do UptimeRobot. Ordem e checklist em "Colocar no ar" e "Checklist manual" no README do `homelab-monitoring`. Depois disso, marcar este item como concluído.
+   **Ainda não está na VPS.** Falta, à mão: merge do `feature/homelab-monitoring` na `main` e `git push` (o `/opt/traefik` é clone do GitHub), depois `git pull` e `docker compose up -d` em `/opt/traefik`, criar o `metricas`, subir a pilha no PC pelo túnel real, testar o alerta no Telegram e criar os monitores do UptimeRobot. Ordem e checklist em "Colocar no ar" e "Checklist manual" no README do `homelab-monitoring`. Depois disso, marcar este item como concluído.
 
 **Melhorias (quando quiser):**
 3. Issue #1: nuvem laranja da Cloudflare (IPs confiáveis no Traefik, SSL "Full (strict)", IP real nos logs).
