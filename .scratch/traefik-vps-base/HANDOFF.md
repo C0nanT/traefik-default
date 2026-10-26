@@ -4,18 +4,66 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 
 ## Onde parou
 
-Última atualização: 2026-10-26. **Os 8 tickets estão `ready-for-human`, sem caixas abertas.**
+Última atualização: 2026-10-26. **Projeto em produção. Os 8 tickets estão `ready-for-human`, sem caixas abertas.**
+
+- `bbcontainermodular.com`: **no ar** pela VPS (DNS na Squarespace, já apontava para ela).
+- `conantorres.dev`: **no ar** pela VPS (DNS na Cloudflare trocado em 2026-10-26, nuvem cinza; `www` é CNAME para a raiz).
 
 | Repositório | `main` | GitHub |
 |---|---|---|
 | `traefik-default` | publicado | <https://github.com/C0nanT/traefik-default> (público) |
-| `bbcontainer` | `bd73acf` | imagem privada no GHCR |
-| `conan-torres` | `fb2cef6` | imagem privada no GHCR (`latest` + SHA) |
+| `bbcontainer` | `bd73acf` | imagem privada `ghcr.io/c0nant/bbcontainer` |
+| `conan-torres` | `fb2cef6` | imagem privada `ghcr.io/c0nant/conan-torres` (`latest` + SHA) |
 
-**VPS (Hetzner, Ubuntu 24.04; IP fora do repositório)** reconstruída do zero e montada só pelo README: borda em `/opt/traefik` com `ACME_AMBIENTE=producao`; `bbcontainer` e `conan-torres` em `/opt/apps/<projeto>` (`healthy`), certificados de produção emitidos (`le-http` para o bbcontainer, curinga `le-dns` para o conantorres.dev).
+## Concluído (sessão de 2026-10-25/26)
 
-- `bbcontainermodular.com`: **no ar** pela VPS (DNS já apontava para ela).
-- `conantorres.dev`: **no ar** pela VPS (DNS na Cloudflare trocado em 2026-10-26, nuvem cinza; `www` é CNAME para a raiz).
+1. **Revisão das 3 branches** (`/review-axes`, padrões + SPEC) e merge na `main`. Correções feitas na revisão:
+   - `traefik-default`: `grep -F` no teste de log, checagem do ID do Traefik no smoke, aviso do `ufw` sem repetição no README, SPEC atualizada (métricas em `127.0.0.1`).
+   - `conan-torres`: `.dockerignore` exclui `docker-compose.prod.yml`; AGENTS.md cobre o compose de produção (`APP_ENV` padrão `production`, regra do `BOOK_FILE_*`).
+2. **`traefik-default` publicado** no GitHub (público), com `.scratch/` versionado. Issue #1 (nuvem laranja) aberta.
+3. **Imagens no GHCR:** push na `main` dos dois sites; CI e "Build & Push Image" verdes. O pacote do conan-torres nasceu **público** (herdou o repo) e foi trocado para **privado** à mão; conferido com acesso anônimo recusado.
+4. **DNS-01 local em staging** com curinga `teste.conantorres.dev` (ticket 03). Primeira tentativa falhou porque o token estava na zona errada.
+5. **VPS reconstruída na Hetzner** (Ubuntu 24.04.4, 2 vCPU, 3,7 GB) e montada só pelo README:
+   - Docker 29.9.2 / Compose v5.6.1, `ufw` com 22/80/443, rede `proxy`, `/opt/traefik` (git clone) e `/opt/apps/<projeto>`.
+   - Login no GHCR com PAT `read:packages` (em `/root/.docker/config.json`).
+   - Subida em staging, conferida de fora, e virada para `producao`. Certificados válidos até 24/01/2027 (renovação automática).
+6. **DNS do conantorres.dev** trocado da Vercel para a VPS e conferido (HTTPS, `www`, cabeçalhos, health).
+
+## O que falta
+
+**Para fechar a migração (rápido):**
+1. **Vercel:** remover `conantorres.dev` e `www.conantorres.dev` do projeto (Settings → Domains). Espere o cache de DNS antigo expirar (~30 min depois da troca).
+2. **Token da Cloudflare:** se ligou o filtro de IP, confira que inclui o IP da VPS (sem ele, a renovação do curinga falha em ~60 dias).
+
+**Melhorias (quando quiser):**
+3. Issue #1: nuvem laranja da Cloudflare (IPs confiáveis no Traefik, SSL "Full (strict)", IP real nos logs).
+4. Deploy pelo CI via SSH (hoje é manual, ver "Operação na VPS").
+5. Token da Cloudflare por arquivo (`CF_DNS_API_TOKEN_FILE`) em vez de variável de ambiente.
+6. Backup do volume `conan-torres_leitor-data` (SQLite do leitor) e de `/opt/traefik/acme/`.
+7. Limpeza de código apontada na revisão (não bloqueante):
+   - `traefik-default`: duplicação dos helpers de teste (`afirmar_*`), `healthcheck` no exemplo do whoami, âncoras YAML nos emissores.
+   - `bbcontainer`: contrato do Traefik descrito em 4 lugares (compose, README, MAIN.md, guia).
+   - `conan-torres`: blocos repetidos entre `docker-compose.yml` e `docker-compose.prod.yml`.
+
+## Operação na VPS
+
+Acesso: `ssh root@<IP da VPS>` (chave já configurada neste computador).
+
+```bash
+# Atualizar um site depois de um push na main (o CI já publicou a imagem)
+cd /opt/apps/<projeto> && docker compose pull && docker compose up -d && docker compose ps
+
+# Estado geral
+docker ps --format '{{.Names}}: {{.Status}}'
+cd /opt/traefik && docker compose logs --tail 50 traefik
+
+# Painel e métricas (no seu computador; depois abra http://localhost:8080/dashboard/)
+ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 root@<IP da VPS>
+```
+
+- `.env` na VPS (todos `600`, nunca no git): `/opt/traefik/.env` (token CF, e-mail, `ACME_AMBIENTE=producao`), `/opt/apps/bbcontainer/.env`, `/opt/apps/conan-torres/.env` (senha do leitor, ID do livro, `APP_ENV=production`).
+- O compose de produção do conan-torres fica na VPS como `/opt/apps/conan-torres/docker-compose.yml` (cópia do `docker-compose.prod.yml`). Se mudar no repo, copie de novo.
+- O `.env` local do `traefik-default` (neste computador) tem o token real e `ACME_AMBIENTE=staging`, para testes locais.
 
 ## Decisões tomadas (resumo; detalhes na SPEC)
 
@@ -28,12 +76,6 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 - **Painel e métricas:** ficam só em `127.0.0.1`, portas 8080 e 8082, e você acessa por túnel SSH. O painel responde só pela rede `painel`; os containers dos sites recebem 403.
 - **Token da Cloudflare:** precisa de `Zone:Zone:Read` e `Zone:DNS:Edit`, limitadas às zonas escolhidas.
 - **Imagens dos sites:** privadas no GHCR, construídas no CI, nunca na VPS. O deploy é manual (`docker compose pull && up -d`), e o deploy pelo CI via SSH fica como evolução.
-
-## Próximos passos
-
-1. **Vercel:** remover `conantorres.dev` e `www.conantorres.dev` do projeto (Settings → Domains).
-2. Issue #1 do `traefik-default`: nuvem laranja (opcional).
-3. Evoluções: deploy pelo CI via SSH; token da Cloudflare por arquivo (`CF_DNS_API_TOKEN_FILE`); refatorar duplicação dos helpers de teste; healthcheck no exemplo do whoami.
 
 ## Como verificar que está tudo certo
 
