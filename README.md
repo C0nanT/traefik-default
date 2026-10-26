@@ -179,6 +179,70 @@ rotação do Docker (5 arquivos de 10 MB):
 docker compose logs -f traefik
 ```
 
+## Monitoramento a partir de outra máquina
+
+O [`homelab-monitoring`](../homelab-monitoring) (Prometheus + Grafana) roda
+**no meu PC**, não na VPS, e coleta as métricas do Traefik (`127.0.0.1:8082`)
+e do node exporter (`127.0.0.1:9100`) por um túnel SSH permanente. Esse túnel
+usa um usuário próprio, `metricas`, sem shell e sem senha, cuja chave **só**
+pode abrir túnel para essas duas portas do loopback. Se a chave vazar, dá para
+ler métricas e nada mais: nem shell, nem o painel (8080), nem outra porta.
+Nada novo é publicado na internet.
+
+Na VPS, uma vez:
+
+1. Crie o usuário, sem shell e sem senha:
+   ```bash
+   sudo adduser --disabled-password --gecos "" --shell /usr/sbin/nologin metricas
+   ```
+2. Coloque a chave pública gerada no PC (`chaves/id_tunel.pub` do
+   `homelab-monitoring`) com as restrições na frente, numa linha só:
+   ```bash
+   sudo install -d -m 700 -o metricas -g metricas /home/metricas/.ssh
+   echo 'restrict,port-forwarding,permitopen="127.0.0.1:8082",permitopen="127.0.0.1:9100" ssh-ed25519 AAAA...COLE_A_CHAVE... metricas@homelab' \
+     | sudo tee /home/metricas/.ssh/authorized_keys >/dev/null
+   sudo chown metricas:metricas /home/metricas/.ssh/authorized_keys
+   sudo chmod 600 /home/metricas/.ssh/authorized_keys
+   ```
+   `restrict` desliga tudo (terminal, agente, X11, encaminhamentos);
+   `port-forwarding` religa só o encaminhamento local, e os `permitopen`
+   limitam o destino a essas duas portas.
+3. Confira a configuração **efetiva** do `sshd` para o `metricas` (inclui
+   `/etc/ssh/sshd_config.d/`; o `-C` aplica também os blocos `Match`):
+   ```bash
+   sudo sshd -T -C user=metricas,host=pc,addr=IP_DO_PC \
+     | grep -iE '^(allowtcpforwarding|disableforwarding|permitopen|allowusers|allowgroups|usepam) '
+   ```
+   - `AllowTcpForwarding` precisa ser `yes` ou `local` (com `no`, o túnel
+     é recusado);
+   - `DisableForwarding` precisa ser `no` (com `yes`, ele vence o
+     `AllowTcpForwarding` e o túnel é recusado);
+   - `permitopen` precisa ser `any` (ou incluir as duas portas);
+   - se existir `allowusers`/`allowgroups`, o `metricas` precisa estar na
+     lista, senão o login é recusado sem aviso claro;
+   - `usepam yes` (padrão do Ubuntu): com ele, a conta sem senha entra por
+     chave normalmente.
+
+   Se precisar mudar, crie um arquivo em `/etc/ssh/sshd_config.d/`, teste
+   com `sudo sshd -t` e aplique com `sudo systemctl reload ssh`.
+4. Teste do PC (manual, uma vez), com a chave do `metricas`:
+   ```bash
+   # Shell recusado: "This account is currently not available." (ou fecha na hora)
+   ssh -i chaves/id_tunel -o IdentitiesOnly=yes metricas@IP_DA_VPS
+   # Porta permitida: deve responder com métricas
+   ssh -i chaves/id_tunel -o IdentitiesOnly=yes -N -L 18082:127.0.0.1:8082 metricas@IP_DA_VPS &
+   sleep 3; curl -s http://localhost:18082/metrics | head -3; kill %1
+   # Porta NÃO permitida (o painel, 8080): o ssh mostra
+   # "channel N: open failed: administratively prohibited" e o curl falha
+   ssh -i chaves/id_tunel -o IdentitiesOnly=yes -N -L 18080:127.0.0.1:8080 metricas@IP_DA_VPS &
+   sleep 3; curl -s http://localhost:18080/api/overview; kill %1
+   ```
+
+O resto (gerar a chave, pegar o `known_hosts` da VPS, preencher o `.env` e
+subir o túnel em container) está em "Túnel até a VPS" no README do
+[`homelab-monitoring`](../homelab-monitoring). Para revogar o acesso, apague
+a linha do `authorized_keys` (ou `sudo deluser --remove-home metricas`).
+
 ## Certificados (Let's Encrypt)
 
 ### Os dois emissores
