@@ -1,0 +1,57 @@
+# Configuração DINÂMICA compartilhada: peças reaproveitáveis.
+#
+# "Dinâmica" = o Traefik relê este diretório sozinho quando um arquivo muda
+# (providers.file.watch em traefik.yml). Não precisa reiniciar.
+#
+# Os sites usam estas peças com o sufixo "@file" nas labels, por exemplo:
+#   traefik.http.routers.meusite.middlewares=seguranca@file,compressao@file
+#
+# NOMES ESTÁVEIS (parte do contrato com os sites; não renomeie):
+#   seguranca@file       cabeçalhos de segurança
+#   compressao@file      compressão gzip/brotli/zstd
+#   www-para-raiz@file   redirect permanente www.dominio -> dominio
+#   (opções TLS "default": valem sozinhas, sem referência)
+#
+# Referência: https://doc.traefik.io/traefik/reference/routing-configuration/http/middlewares/overview/
+
+http:
+  middlewares:
+    # -- seguranca -----------------------------------------------------------
+    seguranca:
+      headers:
+        # HSTS: o navegador passa a usar só HTTPS por 1 ano (31536000 s),
+        # inclusive nos subdomínios. Sem "preload": ele é difícil de desfazer.
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        # Impede que o site seja aberto dentro de um iframe (clickjacking):
+        # X-Frame-Options: DENY.
+        frameDeny: true
+        # X-Content-Type-Options: nosniff (o navegador não "adivinha" tipos).
+        contentTypeNosniff: true
+        # Quanta informação de origem vai no cabeçalho Referer.
+        referrerPolicy: "strict-origin-when-cross-origin"
+
+    # -- compressao ----------------------------------------------------------
+    # Comprime respostas quando o cliente manda Accept-Encoding. Por padrão
+    # só comprime corpos a partir de 1024 bytes.
+    compressao:
+      compress: {}
+
+    # -- www-para-raiz -------------------------------------------------------
+    # Genérico: funciona para qualquer domínio. Tira o "www." do início do
+    # host, mantém esquema, caminho e query. Use em um router separado,
+    # com a regra Host(`www.dominio`).
+    www-para-raiz:
+      redirectRegex:
+        regex: "^(https?)://www\\.(.+)$"
+        replacement: "${1}://${2}"
+        permanent: true
+
+# ---------------------------------------------------------------------------
+# Opções TLS. A opção chamada "default" é aplicada a TODOS os routers que
+# não escolhem outra: por isso o mínimo vale sem nenhuma label nos sites.
+# ---------------------------------------------------------------------------
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12

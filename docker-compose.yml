@@ -27,6 +27,8 @@ services:
       # (/etc/traefik/traefik.yml), que também é onde o comando
       # "traefik healthcheck" procura a configuração.
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      # Peças compartilhadas (configuração dinâmica), só leitura.
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
       # Repare: o socket do Docker NÃO é montado aqui.
     networks:
       - proxy    # onde estão os sites

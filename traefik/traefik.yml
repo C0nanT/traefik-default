@@ -63,6 +63,13 @@ providers:
     # Esta opção diz por qual rede ele deve alcançar os sites.
     network: proxy
 
+  file:
+    # Peças reaproveitáveis (middlewares e opções TLS): ver traefik/dynamic/.
+    # Montado em /etc/traefik/dynamic pelo docker-compose.yml. "watch" faz o
+    # Traefik reler os arquivos quando mudam, sem reiniciar.
+    directory: /etc/traefik/dynamic
+    watch: true
+
 # ---------------------------------------------------------------------------
 # Painel e API.
 # Habilitados, mas NÃO roteados publicamente: não existe router para
