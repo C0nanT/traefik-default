@@ -28,6 +28,15 @@ services:
       - "traefik.http.routers.whoami.rule=Host(`${DOMINIO:?defina DOMINIO no .env}`)"
       # Só HTTPS. O redirecionamento HTTP -> HTTPS é global na borda.
       - "traefik.http.routers.whoami.entrypoints=websecure"
+      # Peças compartilhadas da borda (sufixo @file): cabeçalhos de segurança
+      # e compressão. O TLS mínimo 1.2 vale sozinho, sem label.
+      - "traefik.http.routers.whoami.middlewares=seguranca@file,compressao@file"
+      # Router do www: só redireciona (permanente) para o domínio sem www.
+      - "traefik.http.routers.whoami-www.rule=Host(`www.${DOMINIO}`)"
+      - "traefik.http.routers.whoami-www.entrypoints=websecure"
+      - "traefik.http.routers.whoami-www.middlewares=www-para-raiz@file"
+      # O redirect não chega ao app, mas todo router precisa de um serviço.
+      - "traefik.http.routers.whoami-www.service=whoami"
       # Porta em que o app escuta dentro do container.
       - "traefik.http.services.whoami.loadbalancer.server.port=80"
 
