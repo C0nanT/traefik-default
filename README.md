@@ -207,13 +207,16 @@ Na VPS, uma vez:
    `restrict` desliga tudo (terminal, agente, X11, encaminhamentos);
    `port-forwarding` religa só o encaminhamento local, e os `permitopen`
    limitam o destino a essas duas portas.
-3. Confira a configuração **efetiva** do `sshd` (inclui
-   `/etc/ssh/sshd_config.d/` e blocos `Match`):
+3. Confira a configuração **efetiva** do `sshd` para o `metricas` (inclui
+   `/etc/ssh/sshd_config.d/`; o `-C` aplica também os blocos `Match`):
    ```bash
-   sudo sshd -T | grep -iE '^(allowtcpforwarding|permitopen|allowusers|allowgroups|usepam) '
+   sudo sshd -T -C user=metricas,host=pc,addr=IP_DO_PC \
+     | grep -iE '^(allowtcpforwarding|disableforwarding|permitopen|allowusers|allowgroups|usepam) '
    ```
    - `AllowTcpForwarding` precisa ser `yes` ou `local` (com `no`, o túnel
      é recusado);
+   - `DisableForwarding` precisa ser `no` (com `yes`, ele vence o
+     `AllowTcpForwarding` e o túnel é recusado);
    - `permitopen` precisa ser `any` (ou incluir as duas portas);
    - se existir `allowusers`/`allowgroups`, o `metricas` precisa estar na
      lista, senão o login é recusado sem aviso claro;
@@ -225,13 +228,13 @@ Na VPS, uma vez:
 4. Teste do PC (manual, uma vez), com a chave do `metricas`:
    ```bash
    # Shell recusado: "This account is currently not available." (ou fecha na hora)
-   ssh -i chaves/id_tunel metricas@IP_DA_VPS
+   ssh -i chaves/id_tunel -o IdentitiesOnly=yes metricas@IP_DA_VPS
    # Porta permitida: deve responder com métricas
-   ssh -i chaves/id_tunel -N -L 18082:127.0.0.1:8082 metricas@IP_DA_VPS &
+   ssh -i chaves/id_tunel -o IdentitiesOnly=yes -N -L 18082:127.0.0.1:8082 metricas@IP_DA_VPS &
    sleep 3; curl -s http://localhost:18082/metrics | head -3; kill %1
    # Porta NÃO permitida (o painel, 8080): o ssh mostra
    # "channel N: open failed: administratively prohibited" e o curl falha
-   ssh -i chaves/id_tunel -N -L 18080:127.0.0.1:8080 metricas@IP_DA_VPS &
+   ssh -i chaves/id_tunel -o IdentitiesOnly=yes -N -L 18080:127.0.0.1:8080 metricas@IP_DA_VPS &
    sleep 3; curl -s http://localhost:18080/api/overview; kill %1
    ```
 
