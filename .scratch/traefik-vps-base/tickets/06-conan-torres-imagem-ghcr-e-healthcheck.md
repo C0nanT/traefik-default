@@ -20,5 +20,5 @@ Status: ready-for-agent
 - [ ] Um push na `main` (depois do CI verde) publica `ghcr.io/<owner>/conan-torres` com as tags `latest` e SHA
 - [ ] A imagem é privada
 - [x] O endereço de health responde 200 sem depender da senha do leitor
-- [ ] O container local fica `healthy` com o healthcheck definido
+- [x] O container local fica `healthy` com o healthcheck definido
 - [x] Os segredos (`READER_PASSWORD` etc.) continuam vindo só de variáveis de ambiente em runtime, nunca embutidos na imagem
