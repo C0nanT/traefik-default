@@ -87,7 +87,7 @@ services:
       - socket
     # Nenhuma porta publicada.
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:2375/_ping"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2375/_ping"]
       interval: 10s
       timeout: 5s
       retries: 3
