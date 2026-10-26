@@ -163,7 +163,7 @@ mesmo forjando `X-Forwarded-For`; o `/ping` do healthcheck continua livre. O
 smoke test confere isso (`testes/verificacoes/05-painel.sh`).
 
 As métricas são outra história, de propósito: containers na rede `proxy`
-(ex.: um Prometheus futuro) alcançam `http://traefik:8082/metrics`, sem passar
+(ex.: um Prometheus nessa rede) alcançam `http://traefik:8082/metrics`, sem passar
 pelo host. Já o node exporter não: ele usa a rede do host
 (`network_mode: host`), fora da rede `proxy`, e escuta só em
 `127.0.0.1:9100`. Nenhum container vizinho o alcança, nem pelo gateway da
@@ -480,13 +480,13 @@ Fora do escopo desta base, na ordem natural de estudo:
    Traefik (`forwardedHeaders.trustedIPs`, para o IP real do visitante nos
    logs) e lembrar que o desafio HTTP-01 só funciona se a porta 80 chegar ao
    Traefik. Vira uma issue quando o repositório for publicado.
-2. **Grafana + Prometheus.** As métricas já estão ligadas em
-   `http://traefik:8082/metrics` (rede `proxy`) e em `127.0.0.1:8082` (túnel
-   SSH). Basta subir um Prometheus na rede `proxy` apontando para esse
-   endereço e um Grafana lendo dele, sem publicar portas (acesso por túnel
-   SSH). Painéis úteis: validade dos certificados
-   (`traefik_tls_certs_not_after`, alertar com menos de 20 dias), requisições
-   e erros 5xx por serviço (`traefik_service_requests_total`), e uptime dos sites (blackbox exporter batendo nos
-   domínios por HTTPS).
+2. **Grafana + Prometheus.** Ficam no
+   [`homelab-monitoring`](../homelab-monitoring), que roda no meu PC (não na
+   VPS) e coleta as métricas do Traefik e do node exporter por um túnel SSH
+   com o usuário `metricas` (veja
+   [Monitoramento a partir de outra máquina](#monitoramento-a-partir-de-outra-máquina)).
+   Painéis, alertas no Telegram e o UptimeRobot estão lá; a ordem para subir
+   tudo está em
+   ["Colocar no ar"](../homelab-monitoring#colocar-no-ar).
 3. Ler o [estudo de delegação DNS-01 por CNAME](#estudo-extra-delegação-do-dns-01-por-cname)
    para domínios sem API.
