@@ -4,14 +4,17 @@
 
 secao "Logs: acesso em JSON"
 
-# Faz uma requisição marcada para achar a linha com certeza.
+# Faz uma requisição marcada para achar a linha com certeza. Só lê o log a
+# partir de um instante antes dela (--since), não o histórico inteiro.
+INICIO_LOG="$(date +%s)"
 req https "$HOST_TESTE" /marca-log-04
-linha_log() {
-  docker logs "$ID_TRAEFIK" 2>&1 | grep '^{' | grep -F '/marca-log-04' | tail -n 1
+LINHA=""
+achar_linha_log() {
+  LINHA="$(docker logs --since "$INICIO_LOG" "$ID_TRAEFIK" 2>&1 |
+    grep '^{' | grep -F '/marca-log-04' | tail -n 1)"
+  [ -n "$LINHA" ]
 }
-tem_linha_log() { [ -n "$(linha_log)" ]; }
-esperar_ate 10 tem_linha_log
-LINHA="$(linha_log)"
+esperar_ate 10 achar_linha_log
 afirmar "a requisição gerou linha de log de acesso" test -n "$LINHA"
 afirmar "a linha de log é JSON válido" \
   bash -c 'printf "%s" "$1" | python3 -c "import json,sys; json.load(sys.stdin)"' _ "$LINHA"
@@ -29,13 +32,9 @@ afirmar "max-file definido" \
 
 secao "Métricas: dentro da rede, nunca em 80/443"
 
-# Cliente na rede "proxy" (a mesma dos sites), usando a imagem do Traefik (tem wget).
-metricas_internas() {
-  docker run --rm --network proxy --entrypoint wget "traefik:v3.7.16" \
-    -q -O - "http://traefik:8082/metrics" 2>/dev/null
-}
-# O nome "traefik" resolve pelo serviço do compose da borda.
-CORPO_METRICAS="$(metricas_internas)"
+# Cliente na rede "proxy" (a mesma dos sites). O nome "traefik" resolve pelo
+# serviço do compose da borda.
+CORPO_METRICAS="$(vizinho -q -O - "http://traefik:8082/metrics" 2>/dev/null)"
 afirmar "métricas respondem dentro da rede, a partir de um container" \
   test -n "$CORPO_METRICAS"
 case "$CORPO_METRICAS" in

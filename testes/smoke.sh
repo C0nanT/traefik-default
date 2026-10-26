@@ -16,7 +16,8 @@
 # Como estender: crie um arquivo testes/verificacoes/NN-nome.sh. Todos os
 # arquivos dessa pasta são carregados em ordem alfabética depois que a pilha
 # está de pé, e podem usar as funções de testes/lib.sh (req, afirmar_status,
-# afirmar_cabecalho, ...) e as funções borda/sites abaixo.
+# afirmar_cabecalho, ...), as funções borda/sites/vizinho abaixo e as
+# variáveis ID_TRAEFIK e IMAGEM_TRAEFIK (definidas depois que a pilha sobe).
 
 set -uo pipefail
 
@@ -45,6 +46,19 @@ sites() {
     -f "$RAIZ/exemplos/whoami/docker-compose.yml" \
     -f "$RAIZ/testes/sites-extras.yml" "$@"
 }
+
+# vizinho ARGS...  -> roda o wget (BusyBox) num container descartável na rede
+# "proxy", como se fosse um site vizinho. Usa a mesma imagem do Traefik
+# (que tem wget), lida do container em execução: a tag fica só no
+# docker-compose.yml.
+vizinho() {
+  docker run --rm --network proxy --entrypoint wget "$IMAGEM_TRAEFIK" "$@"
+}
+
+# Imagem do whoami: a tag fica só no exemplo; o sites-extras.yml usa esta.
+IMAGEM_WHOAMI="$(docker compose --env-file "$RAIZ/testes/smoke.env" \
+  -f "$RAIZ/exemplos/whoami/docker-compose.yml" config --images)" || exit 1
+export IMAGEM_WHOAMI
 
 REDE_CRIADA=0
 
@@ -84,6 +98,10 @@ if ! borda up -d --wait --wait-timeout 90; then
   borda logs --tail 50 >&2 || true
   exit 1
 fi
+
+# Lidos uma vez aqui e usados por todas as verificações.
+ID_TRAEFIK="$(borda ps -q traefik)"
+IMAGEM_TRAEFIK="$(docker inspect -f '{{.Config.Image}}' "$ID_TRAEFIK")"
 
 if ! sites up -d --wait --wait-timeout 60; then
   echo "Os sites de teste não subiram." >&2

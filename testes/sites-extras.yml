@@ -5,7 +5,9 @@ services:
   # "traefik.enable=true". O smoke test confirma que ele não é roteado,
   # provando que exposedByDefault=false está valendo.
   sem-label:
-    image: traefik/whoami:v1.12.0
+    # A mesma imagem do exemplo: o smoke.sh lê a tag de
+    # exemplos/whoami/docker-compose.yml (única fonte) e exporta aqui.
+    image: ${IMAGEM_WHOAMI:?definida pelo testes/smoke.sh}
     networks:
       - proxy
     labels:

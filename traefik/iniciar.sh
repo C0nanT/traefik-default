@@ -16,7 +16,9 @@
 #      __ACME_AMBIENTE__ pelos valores do .env;
 #   3. grava o resultado em /etc/traefik/traefik.yml (caminho padrão, que
 #      também é onde "traefik healthcheck --ping" procura a configuração);
-#   4. vira o processo do Traefik (exec), recebendo os sinais do Docker.
+#   4. gera o router do painel/API, que só aceita o túnel SSH (detalhes na
+#      seção "PAINEL/API SÓ PELO TÚNEL SSH", mais abaixo);
+#   5. vira o processo do Traefik (exec), recebendo os sinais do Docker.
 #
 # O token da Cloudflare NÃO passa por aqui: o Traefik (biblioteca lego) lê a
 # variável CF_DNS_API_TOKEN direto do ambiente do container, e só quando
@@ -86,5 +88,71 @@ if [ -d /acme ]; then
 fi
 
 echo "iniciar.sh: emissores ACME em '$ACME_AMBIENTE' ($ACME_CA_SERVER)"
+
+# ---------------------------------------------------------------------------
+# PAINEL/API SÓ PELO TÚNEL SSH
+# A porta 8080 (entrada "traefik") é publicada em 127.0.0.1 da VPS, mas os
+# sites vizinhos na rede "proxy" também alcançam traefik:8080 direto. Para o
+# painel/API só responder a quem vem pelo host, o router abaixo aceita uma
+# única origem: o gateway da rede "painel".
+#
+# Por quê esse IP: uma conexão em 127.0.0.1:8080 do host (o túnel SSH chega
+# assim) é repassada pelo Docker ao container a partir do gateway da rede que
+# dá a rota padrão ao container. O docker-compose.yml faz da rede "painel"
+# (só o Traefik está nela) essa rede, com "gw_priority".
+#
+# Por que é seguro: um vizinho na rede "proxy" não consegue se passar por
+# esse IP. Ele não está na rede "painel"; se forjar o IP de origem, a resposta
+# do Traefik vai pela rede "painel" até o host, e a conexão TCP nunca se
+# completa. O ipAllowList olha o IP da conexão (não X-Forwarded-For: a
+# entrada "traefik" não confia em cabeçalhos encaminhados).
+#
+# O IP é descoberto aqui (não fixado no compose) porque o Docker escolhe a
+# sub-rede de cada rede. Lido de /proc/net/route: na linha da rota padrão
+# (destino 00000000), o gateway vem em hexadecimal, bytes invertidos.
+# ---------------------------------------------------------------------------
+PAINEL_ARQUIVO=/etc/traefik/dynamic/gerado/painel.yml
+
+hex_para_ip() {
+  # "0100A8C0" -> "192.168.0.1"
+  set -- $(printf '%s' "$1" | sed 's/../& /g')
+  printf '%d.%d.%d.%d' "0x$4" "0x$3" "0x$2" "0x$1"
+}
+
+GATEWAY_HEX="$(awk '$2 == "00000000" { print $3; exit }' /proc/net/route)"
+if [ -n "$GATEWAY_HEX" ]; then
+  PAINEL_ORIGEM="$(hex_para_ip "$GATEWAY_HEX")/32"
+else
+  # Sem rota padrão não há como saber a origem do túnel: fecha o painel em
+  # vez de abrir para todos (só o próprio container passa).
+  PAINEL_ORIGEM="127.0.0.1/32"
+  echo "iniciar.sh: AVISO: sem rota padrão; painel/API fechado (só 127.0.0.1)" >&2
+fi
+
+# O diretório gerado/ é um tmpfs (ver docker-compose.yml) dentro das peças,
+# que são só leitura. O provedor de arquivo lê subdiretórios na partida.
+cat > "$PAINEL_ARQUIVO" <<EOF_PAINEL
+# GERADO pelo traefik/iniciar.sh a cada partida. Não edite.
+http:
+  routers:
+    painel:
+      # Só na entrada interna "traefik" (:8080). Sem esta lista o router
+      # valeria em todas as entradas, inclusive 443.
+      entryPoints:
+        - traefik
+      # Painel (/dashboard/) e API (/api/...). O /ping continua livre (é do
+      # healthcheck e não revela nada).
+      rule: "PathPrefix(\`/api\`) || PathPrefix(\`/dashboard\`)"
+      service: api@internal
+      middlewares:
+        - painel-so-tunel
+  middlewares:
+    painel-so-tunel:
+      ipAllowList:
+        sourceRange:
+          - "$PAINEL_ORIGEM"
+EOF_PAINEL
+
+echo "iniciar.sh: painel/API aceita só a origem $PAINEL_ORIGEM (túnel SSH)"
 
 exec traefik "$@"

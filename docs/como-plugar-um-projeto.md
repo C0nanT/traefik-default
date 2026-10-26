@@ -27,8 +27,9 @@ O TLS mínimo 1.2 vale para todos os routers sem nenhuma label.
 2. **Sem `ports:`.** Só `expose` (documentação) e a rede externa `proxy`. Todo
    tráfego entra pelo Traefik.
 3. **Rede `proxy`** declarada como externa, e `traefik.docker.network=proxy`.
-4. **Healthcheck obrigatório** no serviço, para o Docker (e você) saberem se o
-   app está saudável. Use um endpoint próprio (ex.: `/api/health`).
+4. **Healthcheck obrigatório**, para o Docker (e você) saberem se o app está
+   saudável: no serviço do compose **ou** como `HEALTHCHECK` no Dockerfile da
+   imagem (o container herda). Use um endpoint próprio (ex.: `/api/health`).
 5. **Labels** com `traefik.enable=true` (sem ela o Traefik ignora o
    container), router em `websecure`, as peças `@file` e o emissor certo.
 6. Na VPS, o site mora em `/opt/apps/<projeto>/` com **só**
@@ -38,29 +39,23 @@ O TLS mínimo 1.2 vale para todos os routers sem nenhuma label.
 
 O exemplo completo é o arquivo
 [`exemplos/whoami/docker-compose.yml`](../exemplos/whoami/docker-compose.yml).
-Ele é o compose que o smoke test (`testes/smoke.sh`) sobe: não há cópia dele
-neste guia justamente para os dois nunca divergirem. Leia o arquivo; os
-comentários explicam cada label.
+Ele é o compose que o smoke test (`testes/smoke.sh`) sobe, e é a **única**
+cópia das labels base (router, `www`, peças, serviço): este guia não as
+repete, para os dois nunca divergirem. Leia o arquivo; os comentários
+explicam cada label. Copie-o e troque `whoami` pelo nome do projeto.
 
 Duas particularidades, por escolha:
 
 - **Healthcheck.** A imagem `traefik/whoami` é `scratch` (sem shell nem
   `wget`), então não existe healthcheck possível nela. Em vez de trocar o app
   de exemplo ou ter dois composes, o exemplo traz o bloco `healthcheck`
-  **comentado**, pronto para descomentar. Em qualquer site real o bloco é
-  obrigatório:
-  ```yaml
-  healthcheck:
-    test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/api/health"]
-    interval: 30s
-    timeout: 5s
-    retries: 3
-    start_period: 10s
-  ```
-  (`wget`/`curl` precisam existir na imagem do app; senão use um binário do
-  próprio app.)
+  **comentado**, pronto para descomentar e apontar para o endpoint de saúde
+  do app. Em qualquer site real ele é obrigatório (no compose ou no
+  Dockerfile). `wget`/`curl` precisam existir na imagem do app; senão use um
+  binário do próprio app.
 - **Emissor.** O exemplo não pede certificado (o domínio do smoke é
-  fictício). As labels de `le-dns` e `le-http` estão comentadas nele e abaixo.
+  fictício). As linhas a acrescentar para `le-dns` ou `le-http` estão logo
+  abaixo, e só aqui.
 
 ## Qual emissor usar
 
@@ -74,40 +69,33 @@ Não faz curinga. Mais sobre os dois (e o token da Cloudflare, com permissões
 `Zone / DNS / Edit` + `Zone / Zone / Read` só nas zonas escolhidas) no
 [README](../README.md#certificados-lets-encrypt).
 
-### Labels com `le-dns` (curinga)
+### Certificado: as linhas a acrescentar
 
-Troque `meusite` pelo nome do projeto (único na VPS) e `dominio.com` pelo domínio.
+Esta é a referência única das labels de certificado (o README e o exemplo
+apontam para cá). Acrescente **um** dos blocos às labels do exemplo, com
+`meusite` = nome do router do projeto (único na VPS) e `dominio.com` = o
+domínio.
+
+**`le-dns` (curinga)**: só no router principal; pede `dominio` + `*.dominio`.
 
 ```yaml
-labels:
-  - "traefik.enable=true"
-  - "traefik.docker.network=proxy"
-  - "traefik.http.routers.meusite.rule=Host(`dominio.com`)"
-  - "traefik.http.routers.meusite.entrypoints=websecure"
-  - "traefik.http.routers.meusite.middlewares=seguranca@file,compressao@file"
   - "traefik.http.routers.meusite.tls.certresolver=le-dns"
   - "traefik.http.routers.meusite.tls.domains[0].main=dominio.com"
   - "traefik.http.routers.meusite.tls.domains[0].sans=*.dominio.com"
-  - "traefik.http.routers.meusite-www.rule=Host(`www.dominio.com`)"
-  - "traefik.http.routers.meusite-www.entrypoints=websecure"
-  - "traefik.http.routers.meusite-www.middlewares=www-para-raiz@file"
-  - "traefik.http.routers.meusite-www.service=meusite"
-  - "traefik.http.services.meusite.loadbalancer.server.port=80"
 ```
 
 O router do `www` é coberto pelo curinga e não precisa de `certresolver`.
 
-### Labels com `le-http` (nomes exatos)
-
-Igual ao anterior, trocando as três linhas de certificado por:
+**`le-http` (nomes exatos)**: nos dois routers, sem `tls.domains` (cada um
+pede o nome da sua regra `Host(...)`).
 
 ```yaml
   - "traefik.http.routers.meusite.tls.certresolver=le-http"
   - "traefik.http.routers.meusite-www.tls.certresolver=le-http"
 ```
 
-(sem `tls.domains`). O router do `www` **precisa** do `certresolver`: o
-visitante chega em `https://www...` antes do redirect.
+O router do `www` **precisa** do `certresolver`: o visitante chega em
+`https://www...` antes do redirect, e sem curinga ninguém cobre esse nome.
 
 Regras comuns: não declare redirect HTTP para HTTPS (é global), nem regex de
 www (use `www-para-raiz@file`), nem `tls=true`. O router do `www` sempre

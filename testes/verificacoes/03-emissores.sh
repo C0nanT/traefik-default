@@ -9,8 +9,6 @@
 
 secao "Certificados: armazenamento ACME"
 
-ID_TRAEFIK="${ID_TRAEFIK:-$(borda ps -q traefik)}"
-
 # Sem ACME_AMBIENTE definido, o padrão é staging. Um arquivo por emissor e
 # por ambiente; o Traefik cria cada um com permissão 600 ao iniciar.
 for emissor in le-dns le-http; do

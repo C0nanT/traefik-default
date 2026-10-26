@@ -4,7 +4,6 @@
 
 secao "Borda: containers"
 
-ID_TRAEFIK="$(borda ps -q traefik)"
 ID_SOCKET="$(borda ps -q socket-proxy)"
 
 saude() {

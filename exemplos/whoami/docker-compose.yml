@@ -1,6 +1,6 @@
 # Exemplo de site plugado na borda: o app de teste traefik/whoami.
 #
-# Este é o compose usado pelo smoke test (testes/smoke.sh) e será o exemplo
+# Este é o compose usado pelo smoke test (testes/smoke.sh) e o exemplo único
 # do guia (docs/como-plugar-um-projeto.md). Na VPS, um site fica em
 # /opt/apps/<projeto>/ com só este arquivo e um .env.
 #
@@ -51,14 +51,8 @@ services:
       - "traefik.http.routers.whoami-www.service=whoami"
       # Certificado (emissor): sem certresolver, o Traefik serve o certificado
       # padrão dele, o que basta para o smoke test (domínio fictício). Em sites
-      # reais, escolha UM emissor (detalhes e variantes no guia):
-      #   le-dns  (domínio na Cloudflare, curinga):
-      # - "traefik.http.routers.whoami.tls.certresolver=le-dns"
-      # - "traefik.http.routers.whoami.tls.domains[0].main=${DOMINIO}"
-      # - "traefik.http.routers.whoami.tls.domains[0].sans=*.${DOMINIO}"
-      #   le-http (DNS sem API, nomes exatos; o router www também pede):
-      # - "traefik.http.routers.whoami.tls.certresolver=le-http"
-      # - "traefik.http.routers.whoami-www.tls.certresolver=le-http"
+      # reais, acrescente aqui as linhas de UM emissor (le-dns ou le-http),
+      # copiadas do guia, seção "Certificado: as linhas a acrescentar".
       # Porta em que o app escuta dentro do container.
       - "traefik.http.services.whoami.loadbalancer.server.port=80"
 

@@ -21,12 +21,13 @@ afirmar_cabecalho "referrer policy" Referrer-Policy strict-origin-when-cross-ori
 secao "Peças: compressão"
 
 # /data é do whoami e devolve um corpo grande (o Traefik só comprime acima de
-# 1 KB). O curl não descomprime sozinho: o cabeçalho é enviado à mão.
-req https "$HOST_TESTE" "/data?size=8&unit=KB" -H "Accept-Encoding: gzip"
+# 1 KB). O curl não descomprime sozinho: o cabeçalho é enviado à mão. Só
+# status e cabeçalhos importam, então o corpo (binário) é descartado.
+req_sem_corpo https "$HOST_TESTE" "/data?size=8&unit=KB" -H "Accept-Encoding: gzip"
 afirmar_status "resposta grande do whoami" 200
 afirmar_cabecalho "resposta vem comprimida com gzip" Content-Encoding gzip
 
-req https "$HOST_TESTE" "/data?size=8&unit=KB"
+req_sem_corpo https "$HOST_TESTE" "/data?size=8&unit=KB"
 afirmar_status "resposta grande sem Accept-Encoding" 200
 afirmar_cabecalho "sem Accept-Encoding a resposta não é comprimida" Content-Encoding ""
 

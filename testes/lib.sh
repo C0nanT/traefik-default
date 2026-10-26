@@ -4,8 +4,10 @@
 # testes/verificacoes/. Não execute diretamente.
 #
 # Variáveis esperadas (definidas pelo smoke.sh):
-#   HOST_TESTE  domínio do app de exemplo (ex.: whoami.smoke.test)
-#   IP_TESTE    IP onde o Traefik escuta (ex.: 127.0.0.1)
+#   HOST_TESTE      domínio do app de exemplo (ex.: whoami.smoke.test)
+#   IP_TESTE        IP onde o Traefik escuta (ex.: 127.0.0.1)
+#   ID_TRAEFIK      ID do container do Traefik
+#   IMAGEM_TRAEFIK  imagem do Traefik em uso (a tag do docker-compose.yml)
 
 FALHAS=0
 SUCESSOS=0
@@ -40,8 +42,19 @@ secao() {
 #
 # HOST vazio ("") faz a requisição direto ao IP, sem cabeçalho Host de domínio.
 req() {
-  local esquema="$1" host="$2" caminho="$3"
-  shift 3
+  _req 1 "$@"
+}
+
+# req_sem_corpo: igual a req, mas descarta o corpo (RESP_BODY fica vazio).
+# Para quando só status e cabeçalhos importam, ex.: corpo comprimido (binário,
+# que o bash não guarda numa variável).
+req_sem_corpo() {
+  _req 0 "$@"
+}
+
+_req() {
+  local guardar_corpo="$1" esquema="$2" host="$3" caminho="$4"
+  shift 4
   local porta=80
   [ "$esquema" = "https" ] && porta=443
 
@@ -54,14 +67,18 @@ req() {
     alvo="$esquema://$IP_TESTE:$porta$caminho"
   fi
 
-  local tmp_h tmp_b
+  local tmp_h saida=/dev/null
   tmp_h="$(mktemp)"
-  tmp_b="$(mktemp)"
+  [ "$guardar_corpo" = 1 ] && saida="$(mktemp)"
   RESP_STATUS="$(curl -sk --max-time 10 "${resolve[@]}" \
-    -D "$tmp_h" -o "$tmp_b" -w '%{http_code}' "$@" "$alvo" 2>/dev/null)" || true
+    -D "$tmp_h" -o "$saida" -w '%{http_code}' "$@" "$alvo" 2>/dev/null)" || true
   RESP_HEADERS="$(tr -d '\r' <"$tmp_h")"
-  RESP_BODY="$(cat "$tmp_b")"
-  rm -f "$tmp_h" "$tmp_b"
+  RESP_BODY=""
+  if [ "$saida" != /dev/null ]; then
+    RESP_BODY="$(cat "$saida")"
+    rm -f "$saida"
+  fi
+  rm -f "$tmp_h"
 }
 
 # cabecalho NOME -> imprime o valor do cabeçalho NOME da última resposta

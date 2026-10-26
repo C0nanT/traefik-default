@@ -40,7 +40,9 @@ entryPoints:
       tls: {}
 
   # Entrada interna "traefik" (porta 8080): usada pelo ping (healthcheck) e
-  # pelo painel/API. NÃO é publicada no host pelo docker-compose.yml.
+  # pelo painel/API. Publicada só em 127.0.0.1 da VPS (túnel SSH). Os outros
+  # containers da rede "proxy" também alcançam esta porta, mas o painel/API
+  # recusa (403) quem não chega pelo loopback do host: ver "Painel e API".
   traefik:
     address: ":8080"
 
@@ -78,13 +80,19 @@ providers:
 
 # ---------------------------------------------------------------------------
 # Painel e API.
-# "insecure: true" serve painel e API na entrada interna "traefik" (:8080),
-# que só é publicada em 127.0.0.1 da VPS (acesso por túnel SSH, ver README).
-# Não existe router para "api@internal", então nada responde em 80/443.
+# SEM "insecure: true": ele serviria o painel/API na entrada "traefik" para
+# QUALQUER origem, inclusive os sites vizinhos na rede "proxy" (que alcançam
+# traefik:8080 direto, sem passar pelo host).
+#
+# Em vez disso, o traefik/iniciar.sh gera um router "painel" para o serviço
+# interno "api@internal", só na entrada "traefik" (nunca em 80/443), com um
+# ipAllowList que aceita APENAS o gateway da rede "painel". É desse IP que
+# chega quem entra pela porta publicada em 127.0.0.1 (o túnel SSH): o Docker
+# repassa a conexão a partir do gateway da rede que dá a rota padrão ao
+# container. Vizinhos na rede "proxy" recebem 403. Detalhes no iniciar.sh.
 # ---------------------------------------------------------------------------
 api:
   dashboard: true
-  insecure: true
 
 # ---------------------------------------------------------------------------
 # Ping: endpoint /ping na entrada interna "traefik", usado pelo healthcheck

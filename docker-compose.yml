@@ -23,7 +23,8 @@ services:
       - "443:443"
       # Painel/API (8080) e métricas (8082): publicados SÓ no loopback da VPS
       # (127.0.0.1), nunca em interface pública. Acesso por túnel SSH
-      # (ssh -L); ver README.
+      # (ssh -L); ver README. O painel/API ainda recusa os containers da
+      # rede "proxy" (ver a rede "painel" abaixo e o traefik/iniciar.sh).
       - "127.0.0.1:8080:8080"
       - "127.0.0.1:8082:8082"
     # O traefik/iniciar.sh preenche os valores ACME do .env na configuração
@@ -51,9 +52,19 @@ services:
       # Peças compartilhadas (configuração dinâmica), só leitura.
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
       # Repare: o socket do Docker NÃO é montado aqui.
+    tmpfs:
+      # Única parte gravável das peças: o iniciar.sh gera ali o router do
+      # painel/API a cada partida (o diretório existe no repositório só como
+      # ponto de montagem).
+      - /etc/traefik/dynamic/gerado
     networks:
-      - proxy    # onde estão os sites
-      - socket   # só para falar com o socket-proxy
+      painel:
+        # Rota padrão do container por esta rede. É por ela que o Docker
+        # entrega as conexões das portas publicadas em 127.0.0.1, então o
+        # gateway dela é a origem que o painel/API aceita.
+        gw_priority: 1
+      proxy: {}    # onde estão os sites
+      socket: {}   # só para falar com o socket-proxy
     healthcheck:
       # Usa o endpoint /ping (habilitado em traefik.yml).
       test: ["CMD", "traefik", "healthcheck", "--ping"]
@@ -132,6 +143,11 @@ networks:
   proxy:
     external: true
     name: proxy
+
+  # Rede só do Traefik, para a origem do túnel SSH: só quem chega pelo host
+  # (portas publicadas em 127.0.0.1) usa o gateway desta rede. Nenhum outro
+  # container entra aqui. Também é a saída do Traefik para a internet (ACME).
+  painel: {}
 
   # Rede só entre o Traefik e o socket-proxy. "internal: true" = sem saída
   # para a internet e sem acesso a partir de outros containers.

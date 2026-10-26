@@ -75,16 +75,25 @@ subir nada: `docker compose config -q`.
 
 ## Fixar e atualizar a versão do Traefik
 
-As imagens estão **fixadas** em `docker-compose.yml` (`traefik:v3.x.y`,
-`tecnativa/docker-socket-proxy:vX.Y.Z`), nunca `latest`: nada muda sozinho.
+As imagens estão **fixadas**, nunca `latest`: nada muda sozinho. Cada tag
+aparece em um único arquivo:
+
+- `docker-compose.yml`: `traefik:v3.x.y` e
+  `tecnativa/docker-socket-proxy:vX.Y.Z`;
+- `exemplos/whoami/docker-compose.yml`: `traefik/whoami:vX.Y.Z` (app de
+  exemplo e do smoke test).
+
+O smoke test não repete nenhuma delas: usa a imagem do Traefik do container
+em execução e lê a do whoami do exemplo.
 
 Para atualizar, de propósito:
 
 1. Leia as notas de versão do Traefik
    (<https://github.com/traefik/traefik/releases>), sobretudo em mudança de
    versão maior/menor.
-2. Teste antes: no seu computador, troque a tag e rode `testes/smoke.sh`
-   (usa as portas 80/443 da máquina; não rode na VPS com a pilha de pé).
+2. Teste antes: no seu computador, troque a tag em `docker-compose.yml`
+   (só ali) e rode `testes/smoke.sh` (usa as portas 80/443 e
+   127.0.0.1:8080/8082 da máquina; não rode na VPS com a pilha de pé).
 3. Na VPS, troque a tag em `docker-compose.yml` (commit + pull, ou edição
    direta) e então:
    ```bash
@@ -121,8 +130,19 @@ Com o túnel aberto, no seu navegador/terminal:
 Se a porta local já estiver em uso, troque o primeiro número
 (ex.: `-L 9090:127.0.0.1:8080`). Feche o túnel com `Ctrl+C`.
 
-Containers na rede `proxy` (ex.: um Prometheus futuro) alcançam as métricas em
-`http://traefik:8082/metrics`, sem passar pelo host.
+**Por que os sites não leem o painel.** Os containers da rede `proxy` (os
+sites) alcançam o Traefik direto, inclusive a porta 8080, sem passar pelo
+host. Por isso o painel/API não usa `api.insecure` (que responderia a
+qualquer um ali): o `traefik/iniciar.sh` gera um router para ele, só na
+entrada interna 8080, que aceita **uma** origem, o gateway da rede `painel`
+(só do Traefik). É desse IP que o Docker entrega as conexões feitas em
+`127.0.0.1:8080` no host, como as do túnel. Um site vizinho recebe `403`,
+mesmo forjando `X-Forwarded-For`; o `/ping` do healthcheck continua livre. O
+smoke test confere isso (`testes/verificacoes/05-painel.sh`).
+
+As métricas são outra história, de propósito: containers na rede `proxy`
+(ex.: um Prometheus futuro) alcançam `http://traefik:8082/metrics`, sem passar
+pelo host.
 
 ### Logs de acesso
 
@@ -221,26 +241,12 @@ acme/le-http-staging.json   acme/le-http-producao.json
 
 ### Como um site pede o certificado (labels)
 
-Com `le-dns` (domínio + curinga):
-
-```yaml
-- "traefik.http.routers.meusite.tls.certresolver=le-dns"
-- "traefik.http.routers.meusite.tls.domains[0].main=dominio.com"
-- "traefik.http.routers.meusite.tls.domains[0].sans=*.dominio.com"
-```
-
-Com `le-http` (nomes exatos, tirados da regra `Host(...)` de cada router):
-
-```yaml
-# router principal: Host(`dominio.com`)
-- "traefik.http.routers.meusite.tls.certresolver=le-http"
-# router do www (que redireciona para a raiz): Host(`www.dominio.com`)
-- "traefik.http.routers.meusite-www.tls.certresolver=le-http"
-```
-
-O router do `www` também precisa de certificado (o visitante chega em
-`https://www...` antes de ser redirecionado). Com `le-dns` ele já é coberto
-pelo curinga; com `le-http`, ele mesmo pede o seu.
+Cada site escolhe o emissor por label no próprio router. As linhas exatas de
+`le-dns` e `le-http` ficam num lugar só: o guia, em
+[Certificado: as linhas a acrescentar](docs/como-plugar-um-projeto.md#certificado-as-linhas-a-acrescentar).
+Em resumo: com `le-dns` o router principal pede `dominio` + `*.dominio` e o
+`www` já fica coberto pelo curinga; com `le-http` cada router (o principal e
+o do `www`, que o visitante acessa antes do redirect) pede o seu nome exato.
 
 ### Roteiro: testar DNS-01 localmente em staging
 
@@ -265,8 +271,10 @@ temporário, feito pelo próprio Traefik. Usa o subdomínio de teste
    docker compose logs traefik | grep iniciar.sh
    # esperado: emissores ACME em 'staging' (https://acme-staging-v02...)
    ```
-4. Suba um site de teste pedindo o curinga:
+4. Suba um site de teste pedindo o curinga (com a mesma imagem fixada no
+   exemplo, lida de `exemplos/whoami/docker-compose.yml`):
    ```sh
+   WHOAMI="$(DOMINIO=x docker compose -f exemplos/whoami/docker-compose.yml config --images)"
    docker run -d --name teste-dns01 --network proxy \
      -l traefik.enable=true \
      -l 'traefik.http.routers.teste-dns01.rule=Host(`teste.conantorres.dev`)' \
@@ -275,7 +283,7 @@ temporário, feito pelo próprio Traefik. Usa o subdomínio de teste
      -l 'traefik.http.routers.teste-dns01.tls.domains[0].main=teste.conantorres.dev' \
      -l 'traefik.http.routers.teste-dns01.tls.domains[0].sans=*.teste.conantorres.dev' \
      -l traefik.http.services.teste-dns01.loadbalancer.server.port=80 \
-     traefik/whoami:v1.12.0
+     "$WHOAMI"
    ```
 5. Acompanhe a emissão (leva de alguns segundos a ~2 minutos, o tempo de o
    TXT propagar). Erros aparecem com `ERR` e o nome do emissor:
