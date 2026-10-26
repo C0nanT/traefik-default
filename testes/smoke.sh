@@ -6,8 +6,8 @@
 # testes/sites-extras.yml), verifica o comportamento "por fora" com curl e
 # derruba tudo no final, mesmo se algo falhar.
 #
-# ATENÇÃO: usa as portas 80 e 443 do host. Não rode com outra pilha do
-# Traefik (ou qualquer coisa nessas portas) de pé.
+# ATENÇÃO: usa as portas 80 e 443 do host (e 127.0.0.1:8080/8082/9100). Não
+# rode com outra pilha do Traefik (ou qualquer coisa nessas portas) de pé.
 #
 # Uso:   testes/smoke.sh
 # Saída: código 0 se todas as verificações passarem; diferente de zero se

@@ -1,4 +1,4 @@
-# Pilha de borda: Traefik + docker-socket-proxy.
+# Pilha de borda: Traefik + docker-socket-proxy + node exporter.
 #
 # Na VPS este repositório fica em /opt/traefik. Antes do primeiro "up":
 #   docker network create proxy     # uma vez por servidor
@@ -129,6 +129,33 @@ services:
     # Nenhuma porta publicada.
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:2375/_ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    security_opt:
+      - no-new-privileges:true
+
+  node-exporter:
+    # Métricas do host (CPU, memória, disco, rede) para o Prometheus do
+    # homelab, que as lê por túnel SSH (como as 8080/8082 do Traefik).
+    # https://github.com/prometheus/node_exporter
+    image: prom/node-exporter:v1.12.1
+    restart: unless-stopped
+    # Rede e processos do HOST: é o host que se quer medir. Sem rede do
+    # Docker, então fora da rede "proxy": os sites não o alcançam.
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      # SÓ no loopback do host, nunca em interface pública. Acesso por
+      # túnel SSH (ssh -L); ver README.
+      - --web.listen-address=127.0.0.1:9100
+    volumes:
+      # Raiz do host, só leitura (discos e sistemas de arquivos).
+      - /:/host:ro,rslave
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9100/metrics"]
       interval: 10s
       timeout: 5s
       retries: 3
