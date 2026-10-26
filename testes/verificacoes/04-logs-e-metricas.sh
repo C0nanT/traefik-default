@@ -19,7 +19,7 @@ afirmar "a requisição gerou linha de log de acesso" test -n "$LINHA"
 afirmar "a linha de log é JSON válido" \
   bash -c 'printf "%s" "$1" | python3 -c "import json,sys; json.load(sys.stdin)"' _ "$LINHA"
 afirmar "o log traz o host e o status" \
-  bash -c 'printf "%s" "$1" | grep -q "\"RequestHost\":\"$2\"" && printf "%s" "$1" | grep -q "\"DownstreamStatus\":200"' _ "$LINHA" "$HOST_TESTE"
+  bash -c 'printf "%s" "$1" | grep -qF "\"RequestHost\":\"$2\"" && printf "%s" "$1" | grep -q "\"DownstreamStatus\":200"' _ "$LINHA" "$HOST_TESTE"
 
 secao "Logs: limite de tamanho e quantidade"
 

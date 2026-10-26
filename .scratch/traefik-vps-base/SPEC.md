@@ -46,7 +46,7 @@ Antes de ir para a VPS, ajusto bbcontainer e conan-torres para o novo contrato. 
 22. Como dono de VPS, quero que o token da Cloudflare tenha apenas permissão de editar DNS nas zonas escolhidas, para que um vazamento tenha impacto mínimo.
 23. Como dono de VPS, quero que o arquivo de certificados (`acme.json`) persista entre reinícios com permissão restrita, para não reemitir certificados à toa e não expor chaves privadas.
 24. Como dono de VPS, quero logs de acesso em JSON com limite de tamanho, para investigar problemas sem encher o disco.
-25. Como dono de VPS que vai usar Grafana no futuro, quero métricas Prometheus já ligadas numa porta interna não publicada, para só plugar o coletor depois.
+25. Como dono de VPS que vai usar Grafana no futuro, quero métricas Prometheus já ligadas numa porta publicada só em `127.0.0.1` (acesso por túnel SSH), para só plugar o coletor depois.
 26. Como dono de VPS, quero a versão do Traefik fixada, para que atualizações só aconteçam quando eu decidir.
 27. Como dono de VPS, quero o próprio Traefik com healthcheck e política de reinício, para que ele volte sozinho após reboot ou falha.
 28. Como dono de site, quero um guia "como plugar um projeto" com um exemplo de compose completo, para adicionar sites novos sem consultar documentação externa.
@@ -83,7 +83,7 @@ Antes de ir para a VPS, ajusto bbcontainer e conan-torres para o novo contrato. 
 - Provedor Docker com `exposedByDefault=false`, apontando para o `docker-socket-proxy` (sem montar o socket no Traefik). O proxy de socket libera apenas os endpoints de leitura necessários ao Traefik; fica numa rede interna própria, não na rede `proxy`.
 - Provedor de arquivo apontando para a configuração dinâmica compartilhada, com recarga automática.
 - Painel/API habilitados, mas não roteados publicamente; acesso via túnel SSH (documentado).
-- Métricas Prometheus habilitadas numa entrada interna dedicada, não publicada no host.
+- Métricas Prometheus habilitadas numa entrada dedicada, publicada só em `127.0.0.1` do host (acesso por túnel SSH, como o painel).
 - Logs de acesso em JSON; rotação/limite de tamanho via driver de log do Docker.
 - Healthcheck do Traefik via ping interno; `restart: unless-stopped`.
 

@@ -101,6 +101,7 @@ fi
 
 # Lidos uma vez aqui e usados por todas as verificações.
 ID_TRAEFIK="$(borda ps -q traefik)"
+[ -n "$ID_TRAEFIK" ] || { echo "Container do Traefik não encontrado." >&2; exit 1; }
 IMAGEM_TRAEFIK="$(docker inspect -f '{{.Config.Image}}' "$ID_TRAEFIK")"
 
 if ! sites up -d --wait --wait-timeout 60; then

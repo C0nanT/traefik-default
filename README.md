@@ -37,9 +37,7 @@ Faça uma vez por servidor (Debian/Ubuntu; ajuste ao seu sistema).
    sudo ufw allow 443/tcp
    sudo ufw enable
    ```
-   Atenção: portas publicadas pelo Docker passam por cima do `ufw`. Por isso
-   nenhum site pode ter `ports:` (veja o guia), e o painel/métricas são
-   publicados só em `127.0.0.1`. Se o provedor tiver firewall de rede
+   Se o provedor tiver firewall de rede
    (security group), libere lá as mesmas três portas.
 3. **Criar a rede `proxy`** (externa, compartilhada por Traefik e sites):
    ```bash
