@@ -21,8 +21,14 @@ Faça uma vez por servidor (Debian/Ubuntu; ajuste ao seu sistema).
    <https://docs.docker.com/engine/install/>. Confira com
    `docker compose version`. Adicione seu usuário ao grupo `docker`
    (`sudo usermod -aG docker $USER`, e entre de novo na sessão).
+   Versões mínimas: Docker Engine 28.0+ (API 1.48) e Compose 2.33+, exigidas
+   pelo `gw_priority` da rede `painel` (sem isso o painel fica inacessível
+   pelo túnel). Confira com `docker version`.
 2. **Firewall com só 22, 80 e 443** (exemplo com `ufw`; o 22 primeiro, para
-   não se trancar para fora):
+   não se trancar para fora). Atenção: portas publicadas pelo Docker com
+   `ports:` passam por fora do `ufw` (o Docker escreve as próprias regras de
+   iptables). Por isso o guia proíbe `ports:` nos sites e o painel/métricas
+   só são publicados em `127.0.0.1`:
    ```bash
    sudo ufw default deny incoming
    sudo ufw default allow outgoing
