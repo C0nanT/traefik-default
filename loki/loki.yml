@@ -1,0 +1,98 @@
+# Configuração do Loki (armazenamento dos logs da VPS).
+#
+# Modo monolítico: um processo só faz tudo (recebe, guarda, consulta e
+# compacta). Os dados ficam no volume nomeado "loki-dados", montado em /loki.
+# Quem manda as linhas é o Alloy (alloy/config.alloy); quem consulta é o
+# Grafana do homelab-monitoring, pelo túnel SSH (127.0.0.1:3100).
+#
+# Referência: https://grafana.com/docs/loki/latest/configure/
+
+# Sem autenticação: a proteção é a rede. O Loki só é publicado em
+# 127.0.0.1:3100 (túnel SSH do usuário "metricas") e fica fora da rede
+# "proxy" (os sites não o alcançam). Ver docker-compose.yml e README.
+# Com auth_enabled: false, tudo vai para o "tenant" único "fake".
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  # gRPC só é usado entre componentes do próprio processo; não é publicado.
+  grpc_listen_port: 9096
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  # Uma cópia só (um processo, um disco).
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+# Formato do índice e dos pedaços (chunks). "tsdb" + "v13" é o recomendado
+# desde o Loki 3. A data "from" só importa se um dia o esquema mudar: aí se
+# acrescenta uma entrada nova com data futura, sem apagar esta.
+schema_config:
+  configs:
+    - from: 2026-10-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# Limites. São eles que garantem que uma enxurrada de logs (ex.: varredura de
+# bots no log de acesso) seja DESCARTADA em vez de encher o disco da VPS: o
+# que passar da taxa é recusado pelo Loki (o Alloy registra o erro e segue).
+limits_config:
+  # Retenção: 30 dias. Quem apaga é o compactor (abaixo).
+  retention_period: 720h
+  # Taxa total de entrada (todas as linhas juntas), em MB/s, e a rajada.
+  # O normal da VPS é de poucos KB/s. 0,5 MB/s é o teto: no pior caso,
+  # sustentado o dia todo, dá ~43 GB/dia de texto, que o Loki comprime
+  # (~10x) para algo como 4 GB/dia. Uma rajada de minutos é irrelevante; se
+  # o disco apertar, baixe este valor e a retenção.
+  ingestion_rate_mb: 0.5
+  ingestion_burst_size_mb: 2
+  # Taxa por stream (cada combinação de rótulos, ex.: o log de acesso do
+  # Traefik). Uma fonte barulhenta é cortada sem afetar as outras.
+  per_stream_rate_limit: 256KB
+  per_stream_rate_limit_burst: 1MB
+  # Teto de streams (combinações de rótulos). Os rótulos são de baixa
+  # cardinalidade (projeto, servico, stream, tipo, router): algumas dezenas
+  # bastam. Se algo virar rótulo por engano, o Loki recusa em vez de explodir.
+  max_global_streams_per_user: 500
+  # O Loki 3 inventa um rótulo "service_name" (aqui sempre
+  # "unknown_service", porque os nossos se chamam projeto/servico). Lista
+  # vazia = não cria. O nível (detected_level: info, error...) continua sendo
+  # detectado e guardado como metadado da linha (não é rótulo).
+  discover_service_name: []
+  # Linhas gigantes são cortadas (não recusadas).
+  max_line_size: 64KB
+  max_line_size_truncate: true
+  # Recusa linhas muito antigas (ex.: reler um log velho depois de um erro).
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  # Consultas nunca olham além da retenção.
+  max_query_lookback: 720h
+
+# O compactor junta os índices diários e, com retention_enabled, apaga o que
+# passou do retention_period. Sem ele a retenção não acontece.
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  delete_request_store: filesystem
+
+# Sem regras de alerta no Loki (alertas por log ficaram fora do escopo).
+ruler:
+  enable_api: false
+
+# Não envia estatísticas de uso para a Grafana Labs.
+analytics:
+  reporting_enabled: false

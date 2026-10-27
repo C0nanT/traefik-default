@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Smoke test local da pilha de borda.
 #
-# Sobe o Traefik + docker-socket-proxy (docker-compose.yml da raiz) e os sites
-# de teste (o exemplo do guia em exemplos/whoami + extras em
-# testes/sites-extras.yml), verifica o comportamento "por fora" com curl e
-# derruba tudo no final, mesmo se algo falhar.
+# Sobe a borda (docker-compose.yml da raiz: Traefik, docker-socket-proxy, node
+# exporter, Loki e Alloy) e os sites de teste (o exemplo do guia em
+# exemplos/whoami + extras em testes/sites-extras.yml), verifica o
+# comportamento "por fora" com curl e derruba tudo no final, mesmo se algo
+# falhar.
 #
-# ATENÇÃO: usa as portas 80 e 443 do host (e 127.0.0.1:8080/8082/9100). Não
-# rode com outra pilha do Traefik (ou qualquer coisa nessas portas) de pé.
+# ATENÇÃO: usa as portas 80 e 443 do host (e 127.0.0.1:8080/8082/9100/3100).
+# Não rode com outra pilha do Traefik (ou qualquer coisa nessas portas) de pé.
 #
 # Uso:   testes/smoke.sh
 # Saída: código 0 se todas as verificações passarem; diferente de zero se
@@ -93,8 +94,8 @@ if ! docker network inspect proxy >/dev/null 2>&1; then
   REDE_CRIADA=1
 fi
 
-if ! borda up -d --wait --wait-timeout 90; then
-  echo "A borda (Traefik + socket-proxy) não ficou saudável." >&2
+if ! borda up -d --wait --wait-timeout 120; then
+  echo "A borda (Traefik, socket-proxy, node exporter, Loki, Alloy) não ficou saudável." >&2
   borda logs --tail 50 >&2 || true
   exit 1
 fi
@@ -103,6 +104,8 @@ fi
 ID_TRAEFIK="$(borda ps -q traefik)"
 [ -n "$ID_TRAEFIK" ] || { echo "Container do Traefik não encontrado." >&2; exit 1; }
 IMAGEM_TRAEFIK="$(docker inspect -f '{{.Config.Image}}' "$ID_TRAEFIK")"
+# O container "marcador" do sites-extras.yml usa a mesma imagem.
+export IMAGEM_TRAEFIK
 
 if ! sites up -d --wait --wait-timeout 60; then
   echo "Os sites de teste não subiram." >&2

@@ -47,6 +47,9 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 
    **Telegram:** bot criado, `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` só no `.env` do PC; alerta de teste conferido no celular em 2026-10-27, com o texto de `grafana/provisioning/alerting/mensagem.yml` (gravidade, alerta, alvo e horário de Brasília).
 
+**Em andamento:**
+- **Logs no Grafana (Loki e Alloy na borda).** Spec em `homelab-monitoring/.scratch/logs-no-grafana/SPEC.md`. Neste repositório: Loki (`127.0.0.1:3100`, 30 dias, fora da rede `proxy`) e Alloy (lê o Docker só pelo `socket-proxy`) no `docker-compose.yml`, smoke em `testes/verificacoes/07-logs.sh`, README em "Logs (Loki e Alloy)". **Primeiro armazenamento de monitoramento na VPS** (exceção registrada na SPEC). Ainda **não aplicado na VPS**: falta `git pull` + `up -d` em `/opt/traefik` e acrescentar `permitopen="127.0.0.1:3100"` no `authorized_keys` do `metricas` (ticket 04 da spec).
+
 **Melhorias (quando quiser):**
 3. Firewall: aceitar 80/443 no `ufw` só das faixas da Cloudflare (opcional; o `bbcontainermodular.com` não passa pela Cloudflare, então exige regras por destino). A nuvem laranja em si está concluída (issue #1, 2026-10-27).
 4. Deploy pelo CI via SSH (hoje o cron cobre, com atraso de até 10 min e erro só no log da VPS).
@@ -93,7 +96,7 @@ ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 -L 9100:127.0.0.1:9100 root
 
 ## Como verificar que está tudo certo
 
-- No `traefik-default`, rodar `bash testes/smoke.sh`. Ele usa as portas 80, 443, 8080, 8082 e 9100 do seu computador, então elas precisam estar livres. O resultado esperado é `0 falha(s)`.
+- No `traefik-default`, rodar `bash testes/smoke.sh`. Ele usa as portas 80, 443, 8080, 8082, 9100 e 3100 do seu computador, então elas precisam estar livres. O resultado esperado é `0 falha(s)`.
 - `bash testes/docs.sh` confere a documentação.
 
 ## Riscos aceitos e pontos de atenção
