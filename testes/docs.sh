@@ -56,6 +56,10 @@ tem README.md 'administratively prohibited' "README: teste manual da porta recus
 tem README.md '../homelab-monitoring' "README linka o homelab-monitoring"
 # Logs: Loki e Alloy na borda.
 tem README.md '## Logs (Loki e Alloy)' "README: seção de logs"
+tem README.md 'wget-loki' "README: serviço de uma vez que dá o wget ao healthcheck do Loki"
+tem README.md 'docker compose logs socket-proxy' "README: log do socket-proxy fica fora do Loki"
+tem alloy/config.alloy 'servico=\"socket-proxy\"' "Alloy descarta o ruído do socket-proxy"
+nao_tem docker-compose.yml 'ferramentas' "compose sem o nome antigo (ferramentas)"
 tem README.md '127.0.0.1:3100' "README cita a porta 3100 no loopback"
 tem README.md '-L 3100:127.0.0.1:3100' "README: túnel para a 3100"
 tem README.md '30 dias' "README: retenção de 30 dias"

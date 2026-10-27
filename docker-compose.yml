@@ -138,6 +138,14 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    logging:
+      # Rotação pelo Docker, como no Traefik: no máximo 5 arquivos de 10 MB.
+      # Importa aqui: o HAProxy loga cada consulta do Alloy, e esse log NÃO
+      # vai para o Loki (descartado no Alloy); só o Docker o guarda.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     security_opt:
       - no-new-privileges:true
 
@@ -178,16 +186,22 @@ services:
   # métricas. Ver "Logs (Loki e Alloy)" no README.
   # -------------------------------------------------------------------------
 
-  ferramentas:
-    # Serviço de uma vez só: copia o BusyBox estático para o volume
-    # "ferramentas" e termina. A imagem do Loki é "distroless" (sem shell,
-    # sem wget), então o healthcheck dele usa este wget. "stable" do
+  wget-loki:
+    # Serviço de uma vez só: copia o BusyBox estático (que traz o wget) para
+    # o volume "wget-loki" e termina. A imagem do Loki é "distroless" (sem
+    # shell, sem wget), então o healthcheck dele usa este wget. "stable" do
     # BusyBox (as .0 são as instáveis).
     image: busybox:1.36.1-musl
-    command: ["cp", "/bin/busybox", "/ferramentas/busybox"]
+    command: ["cp", "/bin/busybox", "/wget-loki/busybox"]
     volumes:
-      - ferramentas:/ferramentas
+      - wget-loki:/wget-loki
     network_mode: none
+    logging:
+      # Rotação pelo Docker, como no Traefik: no máximo 5 arquivos de 10 MB.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     security_opt:
       - no-new-privileges:true
 
@@ -198,7 +212,7 @@ services:
     image: grafana/loki:3.7.8
     restart: unless-stopped
     depends_on:
-      ferramentas:
+      wget-loki:
         condition: service_completed_successfully
     command:
       - -config.file=/etc/loki/loki.yml
@@ -217,7 +231,7 @@ services:
       # Dados (índice e pedaços) em volume nomeado: sobrevivem à recriação
       # do container. Apagados só por "docker compose down -v".
       - loki-dados:/loki
-      - ferramentas:/ferramentas:ro
+      - wget-loki:/wget-loki:ro
     networks:
       # Rede própria, FORA da rede "proxy": nenhum site alcança o Loki.
       - logs
@@ -227,12 +241,18 @@ services:
     environment:
       GOMEMLIMIT: 450MiB
     healthcheck:
-      test: ["CMD", "/ferramentas/busybox", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3100/ready"]
+      test: ["CMD", "/wget-loki/busybox", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3100/ready"]
       interval: 10s
       timeout: 5s
       retries: 3
       # O /ready só responde 200 uns 15 s depois de subir.
       start_period: 30s
+    logging:
+      # Rotação pelo Docker, como no Traefik: no máximo 5 arquivos de 10 MB.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     security_opt:
       - no-new-privileges:true
 
@@ -283,13 +303,19 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    logging:
+      # Rotação pelo Docker, como no Traefik: no máximo 5 arquivos de 10 MB.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     security_opt:
       - no-new-privileges:true
 
 volumes:
   loki-dados: {}
   alloy-dados: {}
-  ferramentas: {}
+  wget-loki: {}
 
 networks:
   # Rede compartilhada com os sites. É "externa": criada uma vez no servidor
