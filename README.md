@@ -218,8 +218,8 @@ própria borda) por **30 dias**, para o Grafana do
   métricas. A imagem não tem shell nem `wget`: o serviço de uma vez
   `wget-loki` (BusyBox) copia um `wget` para o volume `wget-loki`, usado
   pelo healthcheck.
-- Loki, Alloy e `wget-loki` têm a mesma rotação de log do Docker que o
-  Traefik (5 arquivos de 10 MB).
+- Loki, Alloy, `wget-loki` e o `socket-proxy` têm a mesma rotação de log do
+  Docker que o Traefik (5 arquivos de 10 MB).
 
 Por que um armazenamento na VPS (até aqui só iam exporters leves): o log
 nasce aqui e, guardado no PC, se perderia com o PC desligado. É uma

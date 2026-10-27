@@ -138,6 +138,14 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    logging:
+      # Rotação pelo Docker, como no Traefik: no máximo 5 arquivos de 10 MB.
+      # Importa aqui: o HAProxy loga cada consulta do Alloy, e esse log NÃO
+      # vai para o Loki (descartado no Alloy); só o Docker o guarda.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
     security_opt:
       - no-new-privileges:true
 
