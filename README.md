@@ -79,6 +79,7 @@ chmod 600 .env
 $EDITOR .env          # ACME_AMBIENTE, ACME_EMAIL, CF_DNS_API_TOKEN (se usar le-dns)
 docker compose up -d
 docker compose ps     # traefik, socket-proxy, node-exporter, loki e alloy (healthy)
+docker compose ps -a wget-loki   # roda uma vez e sai: "Exited (0)"
 docker compose logs traefik | grep iniciar.sh   # confirma o ambiente ACME
 ```
 
@@ -205,12 +206,20 @@ própria borda) por **30 dias**, para o Grafana do
   `docker-socket-proxy` (o socket nunca é montado nele). Site novo plugado na
   borda entra sozinho, sem configuração. Lê em tempo real, antes de a
   rotação do Docker descartar a linha; recriar um container (deploy) não
-  apaga o que já foi coletado.
+  apaga o que já foi coletado. **Exceção:** o log do `socket-proxy` é
+  descartado no Alloy (`stage.match` com `action = "drop"`): ele registra
+  cada consulta do Alloy à API do Docker e encheria o Loki de ruído por 30
+  dias. Os 403 do proxy também ficam de fora; veja-os com
+  `docker compose logs socket-proxy`.
 - **Loki** (`grafana/loki`, configuração em `loki/loki.yml`): guarda os
   logs no volume `loki-dados`, publicado **só** em `127.0.0.1:3100`, numa
   rede própria (`logs`), fora da rede `proxy`: nenhum site o alcança. Sem
   autenticação; a proteção é o loopback mais o túnel restrito, como nas
-  métricas.
+  métricas. A imagem não tem shell nem `wget`: o serviço de uma vez
+  `wget-loki` (BusyBox) copia um `wget` para o volume `wget-loki`, usado
+  pelo healthcheck.
+- Loki, Alloy e `wget-loki` têm a mesma rotação de log do Docker que o
+  Traefik (5 arquivos de 10 MB).
 
 Por que um armazenamento na VPS (até aqui só iam exporters leves): o log
 nasce aqui e, guardado no PC, se perderia com o PC desligado. É uma

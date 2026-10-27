@@ -6,6 +6,7 @@
 //   -> Docker guarda (driver json-file)
 //   -> Alloy lê pela API do Docker, via docker-socket-proxy (só leitura)
 //   -> rótulos (projeto, servico, stream; tipo e router no Traefik)
+//   -> descarta o ruído do socket-proxy (passo 4)
 //   -> Loki (http://loki:3100), que guarda por 30 dias
 //
 // O Alloy NUNCA monta /var/run/docker.sock: fala com o socket-proxy, que só
@@ -58,15 +59,29 @@ loki.source.docker "containers" {
   host          = "tcp://socket-proxy:2375"
   targets       = discovery.docker.containers.targets
   relabel_rules = discovery.relabel.containers.rules
-  forward_to    = [loki.process.traefik.receiver]
+  forward_to    = [loki.process.linhas.receiver]
 }
 
-// 4. Linhas do Traefik: separa o log de ACESSO (uma linha JSON por
-//    requisição, ver accessLog em traefik/traefik.yml) do log do PRÓPRIO
-//    Traefik (texto: erros de ACME, de roteamento...). As outras linhas
-//    passam direto, sem mudança.
-loki.process "traefik" {
+// 4. Tratamento das linhas antes do envio. As linhas que nenhum passo abaixo
+//    pega passam direto, sem mudança.
+loki.process "linhas" {
   forward_to = [loki.write.loki.receiver]
+
+  // Socket-proxy: descartado. O HAProxy dele registra CADA consulta à API
+  // do Docker (o Alloy consulta o tempo todo: um inspect por container a
+  // cada 15 s), um fluxo constante que encheria o Loki de ruído por 30
+  // dias. Custo: os 403 (pedido bloqueado pelo proxy) também
+  // somem do Loki; para investigar, "docker compose logs socket-proxy" na
+  // VPS (o Docker ainda guarda as últimas linhas, com rotação).
+  stage.match {
+    selector            = "{servico=\"socket-proxy\"}"
+    action              = "drop"
+    drop_counter_reason = "ruido_socket_proxy"
+  }
+
+  // Linhas do Traefik: separa o log de ACESSO (uma linha JSON por
+  // requisição, ver accessLog em traefik/traefik.yml) do log do PRÓPRIO
+  // Traefik (texto: erros de ACME, de roteamento...).
 
   // Log de acesso: começa com "{".
   stage.match {
