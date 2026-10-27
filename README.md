@@ -523,12 +523,12 @@ IP da Cloudflare para quem passar por ela, não site fora do ar.
 
 Fora do escopo desta base, na ordem natural de estudo:
 
-1. **Nuvem laranja da Cloudflare (proxy).** O Traefik já confia nos IPs da
-   Cloudflare; falta ligar o proxy na zona, seguindo
-   [Nuvem laranja da Cloudflare](#nuvem-laranja-da-cloudflare) (issue #1).
-   Opcional depois: aceitar 80/443 no `ufw` só das faixas da Cloudflare (o
+1. **Firewall só para a Cloudflare (opcional).** A nuvem laranja está ligada
+   no `conantorres.dev` desde 2026-10-27 (veja
+   [Nuvem laranja da Cloudflare](#nuvem-laranja-da-cloudflare)). Dá para
+   aceitar 80/443 no `ufw` só das faixas da Cloudflare, mas o
    `bbcontainermodular.com` não passa pela Cloudflare e precisa delas
-   abertas, então isso exige regras por destino ou fica de fora).
+   abertas, então isso exige regras por destino ou fica de fora.
 2. **Grafana + Prometheus.** Ficam no
    [`homelab-monitoring`](../homelab-monitoring), que roda no meu PC (não na
    VPS) e coleta as métricas do Traefik e do node exporter por um túnel SSH

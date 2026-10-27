@@ -7,7 +7,7 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 Última atualização: 2026-10-27. **Projeto em produção e migração fechada. Os 8 tickets estão `ready-for-human`, sem caixas abertas.**
 
 - `bbcontainermodular.com`: **no ar** pela VPS (DNS na Squarespace, já apontava para ela).
-- `conantorres.dev`: **no ar** pela VPS (DNS na Cloudflare trocado em 2026-10-26, nuvem cinza; `www` é CNAME para a raiz).
+- `conantorres.dev`: **no ar** pela VPS (DNS na Cloudflare trocado em 2026-10-26; `www` é CNAME para a raiz). **Nuvem laranja ligada em 2026-10-27**, SSL Full (strict), IP real do visitante nos logs (issue #1 fechada).
 - Monitoramento (node exporter, usuário `metricas`, pilha no PC): **no ar desde 2026-10-27**, sem Telegram por enquanto (veja "O que falta", item 2).
 
 | Repositório | `main` | GitHub |
@@ -48,7 +48,7 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
    **Falta:** criar o bot do Telegram e preencher `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` no `.env` do PC (hoje `PENDENTE`: os alertas são avaliados no Grafana, mas não chegam no celular) e conferir a volta do túnel depois de uma suspensão real do PC. Checklist em "Checklist manual" no README do `homelab-monitoring`. Depois disso, marcar este item como concluído.
 
 **Melhorias (quando quiser):**
-3. Issue #1: nuvem laranja da Cloudflare. **Traefik pronto** (IPs da Cloudflare em `forwardedHeaders.trustedIPs`, 2026-10-27); falta, no painel da Cloudflare, SSL "Full (strict)" e ligar o proxy, e conferir o IP real nos logs. Passo a passo em "Nuvem laranja da Cloudflare" no README.
+3. Firewall: aceitar 80/443 no `ufw` só das faixas da Cloudflare (opcional; o `bbcontainermodular.com` não passa pela Cloudflare, então exige regras por destino). A nuvem laranja em si está concluída (issue #1, 2026-10-27).
 4. Deploy pelo CI via SSH (hoje o cron cobre, com atraso de até 10 min e erro só no log da VPS).
 5. Token da Cloudflare por arquivo (`CF_DNS_API_TOKEN_FILE`) em vez de variável de ambiente.
 6. Backup do volume `conan-torres_leitor-data` (SQLite do leitor) e de `/opt/traefik/acme/`.
