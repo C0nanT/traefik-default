@@ -43,9 +43,9 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
    - **node exporter** (`prom/node-exporter`) na pilha de borda, com a rede do host e escutando só em `127.0.0.1:9100`; nenhum container vizinho o alcança (smoke: `testes/verificacoes/06-node-exporter.sh`).
    - **Usuário `metricas`** criado na VPS conforme o README ("Monitoramento a partir de outra máquina"): sem shell, senha travada, chave restrita a abrir túnel para `127.0.0.1:8082` e `127.0.0.1:9100`. Conferido em 2026-10-27: shell recusado, 8080 "administratively prohibited".
 
-   **No ar desde 2026-10-27:** node exporter na VPS, pilha no PC coletando pelo túnel real (jobs `sites`, `traefik` e `node` `up`), reconexão conferida (sessão derrubada na VPS e `docker compose restart traefik`). Sem monitor externo (UptimeRobot descartado: a pilha é 100% local, e com o PC desligado ninguém vigia os sites).
+   **No ar desde 2026-10-27:** node exporter na VPS, pilha no PC coletando pelo túnel real (jobs `sites`, `traefik` e `node` `up`), reconexão conferida (sessão derrubada na VPS, `docker compose restart traefik` e suspensão real do PC por uma noite: coleta de volta em ~1,5 min, sem alerta falso). Sem monitor externo (UptimeRobot descartado: a pilha é 100% local, e com o PC desligado ninguém vigia os sites).
 
-   **Falta:** criar o bot do Telegram e preencher `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` no `.env` do PC (hoje `PENDENTE`: os alertas são avaliados no Grafana, mas não chegam no celular) e conferir a volta do túnel depois de uma suspensão real do PC. Checklist em "Checklist manual" no README do `homelab-monitoring`. Depois disso, marcar este item como concluído.
+   **Falta:** criar o bot do Telegram e preencher `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` no `.env` do PC (hoje `PENDENTE`: os alertas são avaliados no Grafana, mas não chegam no celular). Checklist em "Checklist manual" no README do `homelab-monitoring`. Depois disso, marcar este item como concluído.
 
 **Melhorias (quando quiser):**
 3. Firewall: aceitar 80/443 no `ufw` só das faixas da Cloudflare (opcional; o `bbcontainermodular.com` não passa pela Cloudflare, então exige regras por destino). A nuvem laranja em si está concluída (issue #1, 2026-10-27).
