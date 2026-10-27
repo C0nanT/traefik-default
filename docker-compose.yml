@@ -98,7 +98,9 @@ services:
       VERSION: 1      # negociar a versão da API do Docker
       PING: 1         # usado pelo healthcheck abaixo
       NETWORKS: 1     # listar redes (GET /networks): a descoberta de
-                      # containers do Alloy (discovery.docker) exige
+                      # containers do Alloy (discovery.docker) exige; com
+                      # 0 ela falha com 403 e nenhum log é coletado
+                      # (conferido)
       # Nenhum método de escrita (POST/PUT/DELETE): só leitura.
       POST: 0
       # O resto fica bloqueado.
