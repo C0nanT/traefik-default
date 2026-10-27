@@ -61,4 +61,11 @@ tem $H 'node exporter' "HANDOFF registra o node exporter"
 tem $H 'metricas' "HANDOFF registra o usuário metricas"
 tem $H 'no ar, falta o Telegram' "HANDOFF: item 2 no ar, pendente só o Telegram"
 tem $H '127.0.0.1:9100' "HANDOFF cita a porta 9100 no loopback"
+# Nuvem laranja: Traefik confia no X-Forwarded-For só vindo da Cloudflare.
+tem traefik/traefik.yml 'trustedIPs' "traefik.yml: forwardedHeaders.trustedIPs nas entradas públicas"
+tem traefik/traefik.yml '173.245.48.0/20' "traefik.yml: faixas IPv4 da Cloudflare"
+tem traefik/traefik.yml '2400:cb00::/32' "traefik.yml: faixas IPv6 da Cloudflare"
+tem README.md '## Nuvem laranja da Cloudflare' "README: seção da nuvem laranja"
+tem README.md 'https://www.cloudflare.com/ips-v4' "README: de onde vêm as faixas da Cloudflare"
+tem README.md 'Full (strict)' "README: modo SSL/TLS Full (strict)"
 exit $((falhas > 0))

@@ -20,6 +20,40 @@
 entryPoints:
   web:
     address: ":80"
+    # Nuvem laranja: com o proxy da Cloudflare, a conexão chega de um IP da
+    # Cloudflare e o visitante vem no X-Forwarded-For. O Traefik só aceita
+    # esse cabeçalho vindo das faixas oficiais abaixo; de qualquer outra
+    # origem ele é descartado (ninguém falsifica o IP no log). Com a nuvem
+    # cinza nada muda: a conexão vem direto do visitante.
+    # Faixas de https://www.cloudflare.com/ips-v4 e /ips-v6 (conferidas em
+    # 2026-10-27; mudam raramente). Ver "Nuvem laranja da Cloudflare" no
+    # README.
+    forwardedHeaders:
+      trustedIPs: &ips_cloudflare
+        # IPv4
+        - "173.245.48.0/20"
+        - "103.21.244.0/22"
+        - "103.22.200.0/22"
+        - "103.31.4.0/22"
+        - "141.101.64.0/18"
+        - "108.162.192.0/18"
+        - "190.93.240.0/20"
+        - "188.114.96.0/20"
+        - "197.234.240.0/22"
+        - "198.41.128.0/17"
+        - "162.158.0.0/15"
+        - "104.16.0.0/13"
+        - "104.24.0.0/14"
+        - "172.64.0.0/13"
+        - "131.0.72.0/22"
+        # IPv6
+        - "2400:cb00::/32"
+        - "2606:4700::/32"
+        - "2803:f800::/32"
+        - "2405:b500::/32"
+        - "2405:8100::/32"
+        - "2a06:98c0::/29"
+        - "2c0f:f248::/32"
     http:
       # Redirecionamento GLOBAL de HTTP para HTTPS: qualquer requisição na
       # porta 80 é mandada para "websecure" com redirecionamento permanente.
@@ -32,6 +66,9 @@ entryPoints:
 
   websecure:
     address: ":443"
+    # Mesma lista da entrada "web" (âncora YAML).
+    forwardedHeaders:
+      trustedIPs: *ips_cloudflare
     http:
       # Todo router nesta entrada usa TLS por padrão, sem precisar da label
       # "tls=true" em cada site. Enquanto nenhum emissor (certResolver)
@@ -48,7 +85,7 @@ entryPoints:
 
   # Entrada interna "metricas" (porta 8082): só as métricas Prometheus.
   # Publicada apenas em 127.0.0.1 (túnel SSH); visível aos containers na
-  # rede interna (futuro Grafana/Prometheus).
+  # rede interna. O homelab-monitoring coleta por aqui, pelo túnel.
   metricas:
     address: ":8082"
 

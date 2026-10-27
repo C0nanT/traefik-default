@@ -21,6 +21,26 @@ afirmar "a linha de log é JSON válido" \
 afirmar "o log traz o host e o status" \
   bash -c 'printf "%s" "$1" | grep -qF "\"RequestHost\":\"$2\"" && printf "%s" "$1" | grep -q "\"DownstreamStatus\":200"' _ "$LINHA" "$HOST_TESTE"
 
+secao "Logs: X-Forwarded-For só vale vindo da Cloudflare"
+
+# O Traefik só confia no X-Forwarded-For quando a conexão vem das faixas da
+# Cloudflare (forwardedHeaders.trustedIPs em traefik/traefik.yml). O teste
+# chega de fora delas: um X-Forwarded-For forjado não pode virar o IP do
+# visitante no log (ClientHost), senão qualquer um falsifica a origem.
+IP_FORJADO="203.0.113.7"
+INICIO_LOG="$(date +%s)"
+req https "$HOST_TESTE" /marca-log-xff -H "X-Forwarded-For: $IP_FORJADO"
+LINHA_XFF=""
+achar_linha_xff() {
+  LINHA_XFF="$(docker logs --since "$INICIO_LOG" "$ID_TRAEFIK" 2>&1 |
+    grep '^{' | grep -F '/marca-log-xff' | tail -n 1)"
+  [ -n "$LINHA_XFF" ]
+}
+esperar_ate 10 achar_linha_xff
+afirmar "a requisição com X-Forwarded-For gerou linha de log" test -n "$LINHA_XFF"
+afirmar "X-Forwarded-For forjado (fora da Cloudflare) não vira o ClientHost" \
+  bash -c '! printf "%s" "$1" | grep -qF "\"ClientHost\":\"$2"' _ "$LINHA_XFF" "$IP_FORJADO"
+
 secao "Logs: limite de tamanho e quantidade"
 
 afirmar "driver de log json-file" \

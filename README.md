@@ -469,17 +469,66 @@ delegação; e um vazamento dele permitiria emitir certificados para o domínio
 delegado. Por isso fica só como estudo: o modelo usa HTTP-01 para esses
 domínios.
 
+## Nuvem laranja da Cloudflare
+
+Com a nuvem **laranja** (proxy), o visitante fala com a Cloudflare e a
+Cloudflare fala com a VPS. Isso traz cache e proteção, mas muda três coisas:
+
+- **IP do visitante.** A conexão chega de um IP da Cloudflare; o visitante vem
+  no cabeçalho `X-Forwarded-For`. O Traefik só aceita esse cabeçalho vindo das
+  faixas oficiais da Cloudflare (`forwardedHeaders.trustedIPs` nas entradas
+  `web` e `websecure`, em `traefik/traefik.yml`); de qualquer outra origem ele
+  é descartado, para ninguém falsificar o IP no log. O smoke test confere
+  isso (`testes/verificacoes/04-logs-e-metricas.sh`). O painel não muda: ele
+  filtra pela origem da conexão, não pelo cabeçalho.
+- **SSL/TLS.** A zona precisa estar em **Full (strict)**: a Cloudflare fala
+  HTTPS com a VPS e valida o certificado do Let's Encrypt. Em "Flexible" ela
+  fala HTTP, o Traefik redireciona para HTTPS e o site entra em loop de
+  redirecionamento.
+- **Certificado visto de fora.** O visitante (e o blackbox do
+  `homelab-monitoring`) passa a ver o certificado da Cloudflare, não o do
+  Let's Encrypt. Quem vigia a validade do certificado da VPS é o alerta pelo
+  Traefik (`traefik_tls_certs_not_after`), que lê o certificado de dentro.
+
+Só vale para zonas na Cloudflare (`conantorres.dev`). O DNS-01 (`le-dns`) não
+é afetado. Não use HTTP-01 (`le-http`) atrás da nuvem laranja: em Full
+(strict) a Cloudflare fala com a VPS pela 443, e o desafio, que o Traefik
+responde na porta 80, não chega. Em zonas da Cloudflare, use o `le-dns`.
+
+**Ligar, nesta ordem:**
+
+1. A VPS já está com a lista de IPs confiáveis (`git pull` e
+   `docker compose up -d --force-recreate traefik` em `/opt/traefik`).
+2. Na Cloudflare, em *SSL/TLS → Overview*, escolha **Full (strict)**. Com a
+   nuvem ainda cinza nada muda; confira que o site segue abrindo.
+3. Em *DNS → Records*, ligue a nuvem laranja (*Proxied*) no registro do
+   domínio e no `www`.
+4. Confira de fora: `curl -sI https://conantorres.dev` responde `200` com
+   `server: cloudflare`. Na VPS, o log mostra o **seu** IP, não um da
+   Cloudflare:
+   ```bash
+   docker compose logs --since 2m traefik | grep '"RequestHost":"conantorres.dev"' | tail -n 1 | grep -o '"ClientHost":"[^"]*"'
+   ```
+
+**Voltar atrás:** desligue a nuvem (cinza) no DNS. A lista de IPs confiáveis
+pode ficar; com a nuvem cinza ela não faz nada.
+
+**Atualizar as faixas.** A Cloudflare publica as faixas em
+<https://www.cloudflare.com/ips-v4> e <https://www.cloudflare.com/ips-v6>.
+Elas mudam raramente; confira de vez em quando e, se mudarem, troque a lista
+em `traefik/traefik.yml` e recrie o Traefik. Faixa faltando significa log com
+IP da Cloudflare para quem passar por ela, não site fora do ar.
+
 ## Próximos passos
 
 Fora do escopo desta base, na ordem natural de estudo:
 
-1. **Nuvem laranja da Cloudflare (proxy).** Os registros começam em "só DNS"
-   (nuvem cinza), para o Traefik emitir certificados sem surpresa. Com tudo
-   funcionando, ligar a nuvem laranja traz cache e proteção, mas exige: modo
-   SSL/TLS "Full (strict)" na Cloudflare, confiar nos IPs da Cloudflare no
-   Traefik (`forwardedHeaders.trustedIPs`, para o IP real do visitante nos
-   logs) e lembrar que o desafio HTTP-01 só funciona se a porta 80 chegar ao
-   Traefik. Vira uma issue quando o repositório for publicado.
+1. **Nuvem laranja da Cloudflare (proxy).** O Traefik já confia nos IPs da
+   Cloudflare; falta ligar o proxy na zona, seguindo
+   [Nuvem laranja da Cloudflare](#nuvem-laranja-da-cloudflare) (issue #1).
+   Opcional depois: aceitar 80/443 no `ufw` só das faixas da Cloudflare (o
+   `bbcontainermodular.com` não passa pela Cloudflare e precisa delas
+   abertas, então isso exige regras por destino ou fica de fora).
 2. **Grafana + Prometheus.** Ficam no
    [`homelab-monitoring`](../homelab-monitoring), que roda no meu PC (não na
    VPS) e coleta as métricas do Traefik e do node exporter por um túnel SSH

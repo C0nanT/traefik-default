@@ -48,7 +48,7 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
    **Falta:** criar o bot do Telegram e preencher `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` no `.env` do PC (hoje `PENDENTE`: os alertas são avaliados no Grafana, mas não chegam no celular) e conferir a volta do túnel depois de uma suspensão real do PC. Checklist em "Checklist manual" no README do `homelab-monitoring`. Depois disso, marcar este item como concluído.
 
 **Melhorias (quando quiser):**
-3. Issue #1: nuvem laranja da Cloudflare (IPs confiáveis no Traefik, SSL "Full (strict)", IP real nos logs).
+3. Issue #1: nuvem laranja da Cloudflare. **Traefik pronto** (IPs da Cloudflare em `forwardedHeaders.trustedIPs`, 2026-10-27); falta, no painel da Cloudflare, SSL "Full (strict)" e ligar o proxy, e conferir o IP real nos logs. Passo a passo em "Nuvem laranja da Cloudflare" no README.
 4. Deploy pelo CI via SSH (hoje o cron cobre, com atraso de até 10 min e erro só no log da VPS).
 5. Token da Cloudflare por arquivo (`CF_DNS_API_TOKEN_FILE`) em vez de variável de ambiente.
 6. Backup do volume `conan-torres_leitor-data` (SQLite do leitor) e de `/opt/traefik/acme/`.
