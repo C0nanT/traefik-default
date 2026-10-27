@@ -485,7 +485,7 @@ Fora do escopo desta base, na ordem natural de estudo:
    VPS) e coleta as métricas do Traefik e do node exporter por um túnel SSH
    com o usuário `metricas` (veja
    [Monitoramento a partir de outra máquina](#monitoramento-a-partir-de-outra-máquina)).
-   Painéis, alertas no Telegram e o UptimeRobot estão lá; a ordem para subir
+   Painéis e alertas no Telegram estão lá; a ordem para subir
    tudo está em
    ["Colocar no ar"](../homelab-monitoring#colocar-no-ar).
 3. Ler o [estudo de delegação DNS-01 por CNAME](#estudo-extra-delegação-do-dns-01-por-cname)

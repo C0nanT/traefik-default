@@ -4,11 +4,11 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 
 ## Onde parou
 
-Última atualização: 2026-10-26. **Projeto em produção e migração fechada. Os 8 tickets estão `ready-for-human`, sem caixas abertas.**
+Última atualização: 2026-10-27. **Projeto em produção e migração fechada. Os 8 tickets estão `ready-for-human`, sem caixas abertas.**
 
 - `bbcontainermodular.com`: **no ar** pela VPS (DNS na Squarespace, já apontava para ela).
 - `conantorres.dev`: **no ar** pela VPS (DNS na Cloudflare trocado em 2026-10-26, nuvem cinza; `www` é CNAME para a raiz).
-- Monitoramento (node exporter, usuário `metricas`, pilha no PC): **pronto no código, ainda não subido na VPS** (veja "O que falta", item 2).
+- Monitoramento (node exporter, usuário `metricas`, pilha no PC): **no ar desde 2026-10-27**, sem Telegram por enquanto (veja "O que falta", item 2).
 
 | Repositório | `main` | GitHub |
 |---|---|---|
@@ -36,14 +36,16 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 ## O que falta
 
 **Atenção (data marcada):**
-1. **Token da Cloudflare expira em 26/10/2027.** Depois disso a renovação do curinga `conantorres.dev` (DNS-01) falha. Tire a expiração no painel da Cloudflare ou gere um token novo antes, troque em `/opt/traefik/.env` e rode `docker compose up -d` em `/opt/traefik`. O alerta de validade do certificado (item 2) pega isso se for esquecido, depois que o monitoramento estiver no ar.
+1. **Token da Cloudflare expira em 26/10/2027.** Depois disso a renovação do curinga `conantorres.dev` (DNS-01) falha. Tire a expiração no painel da Cloudflare ou gere um token novo antes, troque em `/opt/traefik/.env` e rode `docker compose up -d` em `/opt/traefik`. O alerta de validade do certificado (item 2) pega isso se for esquecido, com o PC ligado; só chega no celular depois que o Telegram for configurado.
 
 **Em andamento:**
-2. **Prometheus + Grafana: feito no código, falta subir na VPS.** O monitoramento ficou no repositório [`homelab-monitoring`](../../../homelab-monitoring), rodando no meu PC (não na VPS). Do lado deste repositório:
+2. **Prometheus + Grafana: no ar, falta o Telegram.** O monitoramento ficou no repositório [`homelab-monitoring`](../../../homelab-monitoring), rodando no meu PC (não na VPS). Do lado deste repositório:
    - **node exporter** (`prom/node-exporter`) na pilha de borda, com a rede do host e escutando só em `127.0.0.1:9100`; nenhum container vizinho o alcança (smoke: `testes/verificacoes/06-node-exporter.sh`).
-   - **Usuário `metricas`** documentado no README ("Monitoramento a partir de outra máquina"): sem shell, sem senha, chave restrita a abrir túnel para `127.0.0.1:8082` e `127.0.0.1:9100`.
+   - **Usuário `metricas`** criado na VPS conforme o README ("Monitoramento a partir de outra máquina"): sem shell, senha travada, chave restrita a abrir túnel para `127.0.0.1:8082` e `127.0.0.1:9100`. Conferido em 2026-10-27: shell recusado, 8080 "administratively prohibited".
 
-   **Ainda não está na VPS.** Falta, à mão: merge do `feature/homelab-monitoring` na `main` e `git push` (o `/opt/traefik` é clone do GitHub), depois `git pull` e `docker compose up -d` em `/opt/traefik`, criar o `metricas`, subir a pilha no PC pelo túnel real, testar o alerta no Telegram e criar os monitores do UptimeRobot. Ordem e checklist em "Colocar no ar" e "Checklist manual" no README do `homelab-monitoring`. Depois disso, marcar este item como concluído.
+   **No ar desde 2026-10-27:** node exporter na VPS, pilha no PC coletando pelo túnel real (jobs `sites`, `traefik` e `node` `up`), reconexão conferida (sessão derrubada na VPS e `docker compose restart traefik`). Sem monitor externo (UptimeRobot descartado: a pilha é 100% local, e com o PC desligado ninguém vigia os sites).
+
+   **Falta:** criar o bot do Telegram e preencher `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` no `.env` do PC (hoje `PENDENTE`: os alertas são avaliados no Grafana, mas não chegam no celular) e conferir a volta do túnel depois de uma suspensão real do PC. Checklist em "Checklist manual" no README do `homelab-monitoring`. Depois disso, marcar este item como concluído.
 
 **Melhorias (quando quiser):**
 3. Issue #1: nuvem laranja da Cloudflare (IPs confiáveis no Traefik, SSL "Full (strict)", IP real nos logs).

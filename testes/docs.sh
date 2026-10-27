@@ -59,7 +59,6 @@ nao_tem README.md 'Basta subir um Prometheus na rede' "próximos passos sem o pl
 tem README.md '../homelab-monitoring#colocar-no-ar' "próximos passos aponta para colocar no ar do homelab-monitoring"
 tem $H 'node exporter' "HANDOFF registra o node exporter"
 tem $H 'metricas' "HANDOFF registra o usuário metricas"
-tem $H 'feito no código, falta subir na VPS' "HANDOFF: item 2 feito no código, pendente na VPS"
-tem $H 'merge do `feature/homelab-monitoring` na `main`' "HANDOFF: publicar no GitHub antes do git pull na VPS"
+tem $H 'no ar, falta o Telegram' "HANDOFF: item 2 no ar, pendente só o Telegram"
 tem $H '127.0.0.1:9100' "HANDOFF cita a porta 9100 no loopback"
 exit $((falhas > 0))
