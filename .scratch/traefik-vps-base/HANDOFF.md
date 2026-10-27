@@ -8,7 +8,7 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 
 - `bbcontainermodular.com`: **no ar** pela VPS (DNS na Squarespace, já apontava para ela).
 - `conantorres.dev`: **no ar** pela VPS (DNS na Cloudflare trocado em 2026-10-26; `www` é CNAME para a raiz). **Nuvem laranja ligada em 2026-10-27**, SSL Full (strict), IP real do visitante nos logs (issue #1 fechada).
-- Monitoramento (node exporter, usuário `metricas`, pilha no PC): **no ar desde 2026-10-27**, sem Telegram por enquanto (veja "O que falta", item 2).
+- Monitoramento (node exporter, usuário `metricas`, pilha no PC): **no ar desde 2026-10-27**, com alertas no Telegram (veja "O que falta", item 2, concluído).
 
 | Repositório | `main` | GitHub |
 |---|---|---|
@@ -36,16 +36,16 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 ## O que falta
 
 **Atenção (data marcada):**
-1. **Token da Cloudflare expira em 26/10/2027.** Depois disso a renovação do curinga `conantorres.dev` (DNS-01) falha. Tire a expiração no painel da Cloudflare ou gere um token novo antes, troque em `/opt/traefik/.env` e rode `docker compose up -d` em `/opt/traefik`. O alerta de validade do certificado (item 2) pega isso se for esquecido, com o PC ligado; só chega no celular depois que o Telegram for configurado.
+1. **Token da Cloudflare expira em 26/10/2027.** Depois disso a renovação do curinga `conantorres.dev` (DNS-01) falha. Tire a expiração no painel da Cloudflare ou gere um token novo antes, troque em `/opt/traefik/.env` e rode `docker compose up -d` em `/opt/traefik`. O alerta de validade do certificado (item 2) pega isso se for esquecido, com o PC ligado, e avisa no Telegram.
 
-**Em andamento:**
-2. **Prometheus + Grafana: no ar, falta o Telegram.** O monitoramento ficou no repositório [`homelab-monitoring`](../../../homelab-monitoring), rodando no meu PC (não na VPS). Do lado deste repositório:
+**Concluído:**
+2. **Prometheus + Grafana: concluído em 2026-10-27, com alertas no Telegram.** O monitoramento ficou no repositório [`homelab-monitoring`](../../../homelab-monitoring), rodando no meu PC (não na VPS). Do lado deste repositório:
    - **node exporter** (`prom/node-exporter`) na pilha de borda, com a rede do host e escutando só em `127.0.0.1:9100`; nenhum container vizinho o alcança (smoke: `testes/verificacoes/06-node-exporter.sh`).
    - **Usuário `metricas`** criado na VPS conforme o README ("Monitoramento a partir de outra máquina"): sem shell, senha travada, chave restrita a abrir túnel para `127.0.0.1:8082` e `127.0.0.1:9100`. Conferido em 2026-10-27: shell recusado, 8080 "administratively prohibited".
 
    **No ar desde 2026-10-27:** node exporter na VPS, pilha no PC coletando pelo túnel real (jobs `sites`, `traefik` e `node` `up`), reconexão conferida (sessão derrubada na VPS, `docker compose restart traefik` e suspensão real do PC por uma noite: coleta de volta em ~1,5 min, sem alerta falso). Sem monitor externo (UptimeRobot descartado: a pilha é 100% local, e com o PC desligado ninguém vigia os sites).
 
-   **Falta:** criar o bot do Telegram e preencher `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` no `.env` do PC (hoje `PENDENTE`: os alertas são avaliados no Grafana, mas não chegam no celular). Checklist em "Checklist manual" no README do `homelab-monitoring`. Depois disso, marcar este item como concluído.
+   **Telegram:** bot criado, `TELEGRAM_BOT_TOKEN`/`TELEGRAM_CHAT_ID` só no `.env` do PC; alerta de teste conferido no celular em 2026-10-27, com o texto de `grafana/provisioning/alerting/mensagem.yml` (gravidade, alerta, alvo e horário de Brasília).
 
 **Melhorias (quando quiser):**
 3. Firewall: aceitar 80/443 no `ufw` só das faixas da Cloudflare (opcional; o `bbcontainermodular.com` não passa pela Cloudflare, então exige regras por destino). A nuvem laranja em si está concluída (issue #1, 2026-10-27).

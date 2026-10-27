@@ -59,7 +59,7 @@ nao_tem README.md 'Basta subir um Prometheus na rede' "próximos passos sem o pl
 tem README.md '../homelab-monitoring#colocar-no-ar' "próximos passos aponta para colocar no ar do homelab-monitoring"
 tem $H 'node exporter' "HANDOFF registra o node exporter"
 tem $H 'metricas' "HANDOFF registra o usuário metricas"
-tem $H 'no ar, falta o Telegram' "HANDOFF: item 2 no ar, pendente só o Telegram"
+tem $H 'concluído em 2026-10-27, com alertas no Telegram' "HANDOFF: item 2 concluído, com Telegram"
 tem $H '127.0.0.1:9100' "HANDOFF cita a porta 9100 no loopback"
 # Nuvem laranja: Traefik confia no X-Forwarded-For só vindo da Cloudflare.
 tem traefik/traefik.yml 'trustedIPs' "traefik.yml: forwardedHeaders.trustedIPs nas entradas públicas"
