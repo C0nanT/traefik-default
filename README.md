@@ -10,6 +10,7 @@ simples para plugar sites. Cada site vive no próprio repositório e entra pelo
 [Fixar e atualizar a versão do Traefik](#fixar-e-atualizar-a-versão-do-traefik) ·
 [Plugar um site](docs/como-plugar-um-projeto.md) ·
 [Painel e métricas](#painel-e-métricas-via-túnel-ssh) ·
+[Logs](#logs-loki-e-alloy) ·
 [Certificados](#certificados-lets-encrypt) ·
 [Próximos passos](#próximos-passos)
 
@@ -77,7 +78,7 @@ cp .env.example .env
 chmod 600 .env
 $EDITOR .env          # ACME_AMBIENTE, ACME_EMAIL, CF_DNS_API_TOKEN (se usar le-dns)
 docker compose up -d
-docker compose ps     # traefik e socket-proxy devem estar (healthy)
+docker compose ps     # traefik, socket-proxy, node-exporter, loki e alloy (healthy)
 docker compose logs traefik | grep iniciar.sh   # confirma o ambiente ACME
 ```
 
@@ -96,7 +97,9 @@ As imagens estão **fixadas**, nunca `latest`: nada muda sozinho. Cada tag
 aparece em um único arquivo:
 
 - `docker-compose.yml`: `traefik:v3.x.y`,
-  `tecnativa/docker-socket-proxy:vX.Y.Z` e `prom/node-exporter:vX.Y.Z`;
+  `tecnativa/docker-socket-proxy:vX.Y.Z`, `prom/node-exporter:vX.Y.Z`,
+  `grafana/loki:X.Y.Z` (sem o "v"), `grafana/alloy:vX.Y.Z` e
+  `busybox:X.Y.Z-musl` (só o wget do healthcheck do Loki);
 - `exemplos/whoami/docker-compose.yml`: `traefik/whoami:vX.Y.Z` (app de
   exemplo e do smoke test).
 
@@ -109,10 +112,14 @@ Para atualizar, de propósito:
    (<https://github.com/traefik/traefik/releases>), sobretudo em mudança de
    versão maior/menor. Para o node exporter, as de
    <https://github.com/prometheus/node_exporter/releases> (nomes de métricas
-   podem mudar e quebrar painéis/alertas do Grafana).
+   podem mudar e quebrar painéis/alertas do Grafana). Para o Loki e o
+   Alloy, <https://github.com/grafana/loki/releases> e
+   <https://github.com/grafana/alloy/releases> (o Loki muda formato de
+   armazenamento e opções entre versões menores; leia o "upgrade guide").
 2. Teste antes: no seu computador, troque a tag em `docker-compose.yml`
    (só ali) e rode `testes/smoke.sh` (usa as portas 80/443 e
-   127.0.0.1:8080/8082/9100 da máquina; não rode na VPS com a pilha de pé).
+   127.0.0.1:8080/8082/9100/3100 da máquina; não rode na VPS com a pilha de
+   pé).
 3. Na VPS, troque a tag em `docker-compose.yml` (commit + pull, ou edição
    direta) e então:
    ```bash
@@ -120,12 +127,15 @@ Para atualizar, de propósito:
    docker compose up -d
    docker compose ps && docker compose logs --tail 50 traefik
    docker compose logs --tail 50 node-exporter   # se trocou essa tag
+   docker compose logs --tail 50 loki alloy      # se trocou essas tags
    ```
 4. Para voltar atrás, restaure a tag anterior e repita o `up -d`. Faça
    backup de `acme/` antes de atualizar.
 
 Os arquivos de `acme/` e o `.env` ficam fora do controle de versão e
-sobrevivem à troca de imagem.
+sobrevivem à troca de imagem. Os logs guardados ficam no volume
+`traefik_loki-dados` e também sobrevivem (só `docker compose down -v` os
+apaga).
 
 ## Painel e métricas via túnel SSH
 
@@ -139,7 +149,7 @@ servidor, por um túnel SSH.
 No seu computador:
 
 ```bash
-ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 -L 9100:127.0.0.1:9100 usuario@IP_DA_VPS
+ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 -L 9100:127.0.0.1:9100 -L 3100:127.0.0.1:3100 usuario@IP_DA_VPS
 ```
 
 Com o túnel aberto, no seu navegador/terminal:
@@ -148,6 +158,8 @@ Com o túnel aberto, no seu navegador/terminal:
 - API: <http://localhost:8080/api/overview>
 - Métricas do Traefik: <http://localhost:8082/metrics>
 - Métricas do host (node exporter): <http://localhost:9100/metrics>
+- Loki (logs): <http://localhost:3100/ready> (consultas: veja
+  [Logs](#logs-loki-e-alloy))
 
 Se a porta local já estiver em uso, troque o primeiro número
 (ex.: `-L 9090:127.0.0.1:8080`). Feche o túnel com `Ctrl+C`.
@@ -179,14 +191,102 @@ rotação do Docker (5 arquivos de 10 MB):
 docker compose logs -f traefik
 ```
 
+Esse histórico é curto e some quando o container é recriado. O que fica
+guardado por 30 dias está no Loki (próxima seção).
+
+## Logs (Loki e Alloy)
+
+A borda guarda os logs de **todos** os containers da VPS (os sites e a
+própria borda) por **30 dias**, para o Grafana do
+[`homelab-monitoring`](../homelab-monitoring) consultar pelo túnel SSH:
+
+- **Alloy** (`grafana/alloy`, configuração em `alloy/config.alloy`): descobre
+  os containers e lê os logs pela API do Docker, **só leitura**, pelo
+  `docker-socket-proxy` (o socket nunca é montado nele). Site novo plugado na
+  borda entra sozinho, sem configuração. Lê em tempo real, antes de a
+  rotação do Docker descartar a linha; recriar um container (deploy) não
+  apaga o que já foi coletado.
+- **Loki** (`grafana/loki`, configuração em `loki/loki.yml`): guarda os
+  logs no volume `loki-dados`, publicado **só** em `127.0.0.1:3100`, numa
+  rede própria (`logs`), fora da rede `proxy`: nenhum site o alcança. Sem
+  autenticação; a proteção é o loopback mais o túnel restrito, como nas
+  métricas.
+
+Por que um armazenamento na VPS (até aqui só iam exporters leves): o log
+nasce aqui e, guardado no PC, se perderia com o PC desligado. É uma
+exceção consciente, registrada na SPEC.
+
+**Rótulos** (poucos e de baixa cardinalidade; o resto fica no corpo da
+linha e sai na consulta com `| json`):
+
+| Rótulo | Valores | De onde vem |
+|---|---|---|
+| `projeto` | `traefik`, `conan-torres`, `bbcontainer`... | projeto do compose |
+| `servico` | `traefik`, `web`, `app`, `loki`... | serviço do compose |
+| `stream` | `stdout`, `stderr` | saída do container |
+| `tipo` | `acesso`, `traefik` | só nas linhas do Traefik: JSON de acesso ou log próprio |
+| `router` | ex.: `conan-torres@docker` | só nas linhas de acesso, do campo `RouterName` |
+
+O `router` vem do `RouterName` (os routers configurados, um conjunto
+fechado), **nunca** do `RequestHost`: o Host vem do cliente, e bots mandando
+qualquer Host criariam um stream novo por valor. Requisição que não casou
+com nenhum router (404 da borda) fica sem `router`.
+
+**Limites** (`loki/loki.yml`): taxa de entrada e rajada (total e por
+stream), teto de streams e tamanho de linha. Numa enxurrada (varredura de
+bots), o excesso é recusado em vez de encher o disco. E com o disco do host
+acima de 90% o Loki recusa linhas novas. Memória: 512 MB no Loki e 256 MB
+no Alloy (`mem_limit`). Uso de disco: veja o painel de Host do Grafana ou
+`docker system df -v | grep loki-dados`.
+
+**Porta 3100 para o `metricas`.** O Grafana lê o Loki pelo mesmo túnel das
+métricas. A linha do `authorized_keys` do `metricas` precisa de
+`permitopen="127.0.0.1:3100"` (já está no passo 2 de
+[Monitoramento a partir de outra máquina](#monitoramento-a-partir-de-outra-máquina)).
+Quem já tinha a linha antiga, na VPS:
+
+```bash
+sudo sed -i 's|permitopen="127.0.0.1:9100"|permitopen="127.0.0.1:9100",permitopen="127.0.0.1:3100"|' \
+  /home/metricas/.ssh/authorized_keys
+sudo cat /home/metricas/.ssh/authorized_keys   # confira a linha
+```
+
+O `sshd` lê o arquivo a cada conexão: basta o túnel reconectar.
+
+### Consulta de emergência na VPS
+
+Sem o PC, direto na VPS (o Loki responde no loopback), com `curl`. A
+consulta é LogQL; `since` é o período:
+
+```bash
+# Estado do Loki
+curl -s http://127.0.0.1:3100/ready
+# Quais projetos têm logs
+curl -s http://127.0.0.1:3100/loki/api/v1/label/projeto/values
+# Últimas 50 linhas do stderr do conan-torres na última hora
+curl -s -G http://127.0.0.1:3100/loki/api/v1/query_range \
+  --data-urlencode 'query={projeto="conan-torres", stream="stderr"}' \
+  --data-urlencode 'since=1h' --data-urlencode 'limit=50' \
+  | python3 -c 'import json,sys; [print(l) for r in json.load(sys.stdin)["data"]["result"] for _, l in r["values"]]'
+# Respostas 5xx do log de acesso nas últimas 6 horas
+curl -s -G http://127.0.0.1:3100/loki/api/v1/query_range \
+  --data-urlencode 'query={tipo="acesso"} | json | DownstreamStatus >= 500' \
+  --data-urlencode 'since=6h' --data-urlencode 'limit=50'
+```
+
+Se o Loki estiver fora, o log curto do Docker continua lá:
+`docker compose logs` em `/opt/traefik` ou na pasta do site.
+
 ## Monitoramento a partir de outra máquina
 
 O [`homelab-monitoring`](../homelab-monitoring) (Prometheus + Grafana) roda
 **no meu PC**, não na VPS, e coleta as métricas do Traefik (`127.0.0.1:8082`)
-e do node exporter (`127.0.0.1:9100`) por um túnel SSH permanente. Esse túnel
-usa um usuário próprio, `metricas`, sem shell e sem senha, cuja chave **só**
-pode abrir túnel para essas duas portas do loopback. Se a chave vazar, dá para
-ler métricas e nada mais: nem shell, nem o painel (8080), nem outra porta.
+e do node exporter (`127.0.0.1:9100`), e consulta os logs no Loki
+(`127.0.0.1:3100`), por um túnel SSH permanente. Esse túnel usa um usuário
+próprio, `metricas`, sem shell e sem senha, cuja chave **só** pode abrir
+túnel para essas três portas do loopback. Se a chave vazar, dá para ler
+métricas e logs e nada mais: nem shell, nem o painel (8080), nem outra
+porta.
 Nada novo é publicado na internet.
 
 Na VPS, uma vez:
@@ -199,14 +299,14 @@ Na VPS, uma vez:
    `homelab-monitoring`) com as restrições na frente, numa linha só:
    ```bash
    sudo install -d -m 700 -o metricas -g metricas /home/metricas/.ssh
-   echo 'restrict,port-forwarding,permitopen="127.0.0.1:8082",permitopen="127.0.0.1:9100" ssh-ed25519 AAAA...COLE_A_CHAVE... metricas@homelab' \
+   echo 'restrict,port-forwarding,permitopen="127.0.0.1:8082",permitopen="127.0.0.1:9100",permitopen="127.0.0.1:3100" ssh-ed25519 AAAA...COLE_A_CHAVE... metricas@homelab' \
      | sudo tee /home/metricas/.ssh/authorized_keys >/dev/null
    sudo chown metricas:metricas /home/metricas/.ssh/authorized_keys
    sudo chmod 600 /home/metricas/.ssh/authorized_keys
    ```
    `restrict` desliga tudo (terminal, agente, X11, encaminhamentos);
    `port-forwarding` religa só o encaminhamento local, e os `permitopen`
-   limitam o destino a essas duas portas.
+   limitam o destino a essas três portas.
 3. Confira a configuração **efetiva** do `sshd` para o `metricas` (inclui
    `/etc/ssh/sshd_config.d/`; o `-C` aplica também os blocos `Match`):
    ```bash
@@ -217,7 +317,7 @@ Na VPS, uma vez:
      é recusado);
    - `DisableForwarding` precisa ser `no` (com `yes`, ele vence o
      `AllowTcpForwarding` e o túnel é recusado);
-   - `permitopen` precisa ser `any` (ou incluir as duas portas);
+   - `permitopen` precisa ser `any` (ou incluir as três portas);
    - se existir `allowusers`/`allowgroups`, o `metricas` precisa estar na
      lista, senão o login é recusado sem aviso claro;
    - `usepam yes` (padrão do Ubuntu): com ele, a conta sem senha entra por

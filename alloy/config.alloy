@@ -1,0 +1,108 @@
+// Configuração do Grafana Alloy: coleta os logs de TODOS os containers da
+// VPS e manda para o Loki da borda.
+//
+// Caminho de uma linha de log:
+//   container escreve no stdout/stderr
+//   -> Docker guarda (driver json-file)
+//   -> Alloy lê pela API do Docker, via docker-socket-proxy (só leitura)
+//   -> rótulos (projeto, servico, stream; tipo e router no Traefik)
+//   -> Loki (http://loki:3100), que guarda por 30 dias
+//
+// O Alloy NUNCA monta /var/run/docker.sock: fala com o socket-proxy, que só
+// libera GET (POST=0). Um bug ou falha aqui não dá controle do Docker.
+//
+// Rótulos (labels) são poucos e de baixa cardinalidade, porque cada
+// combinação de valores vira um "stream" no Loki. O resto (status, caminho,
+// IP do visitante, duração...) fica no corpo da linha e é extraído na
+// consulta com LogQL, ex.: {tipo="acesso"} | json | DownstreamStatus >= 500
+//
+// Referência: https://grafana.com/docs/alloy/latest/reference/components/
+
+// 1. Descoberta: lista os containers pela API do Docker (GET /containers/json,
+//    GET /networks), a cada 15 s. Site novo plugado na borda entra sozinho.
+discovery.docker "containers" {
+  host             = "tcp://socket-proxy:2375"
+  refresh_interval = "15s"
+}
+
+// 2. Regras de rótulo. Os metadados do Docker chegam como "__meta_docker_*"
+//    (descartados no fim); só o que for copiado para um nome sem "__" vira
+//    rótulo no Loki.
+discovery.relabel "containers" {
+  targets = []
+
+  // Projeto do compose (ex.: conan-torres, bbcontainer, traefik).
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "projeto"
+  }
+
+  // Serviço do compose (ex.: web, app, traefik).
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "servico"
+  }
+
+  // stdout ou stderr (preenchido pelo loki.source.docker a cada linha).
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+}
+
+// 3. Leitura dos logs: segue cada container descoberto pela API do Docker
+//    (GET /containers/{id}/logs), também pelo socket-proxy. A posição de
+//    leitura fica em --storage.path (volume "alloy-dados"), então reiniciar o
+//    Alloy não duplica nem pula linhas.
+loki.source.docker "containers" {
+  host          = "tcp://socket-proxy:2375"
+  targets       = discovery.docker.containers.targets
+  relabel_rules = discovery.relabel.containers.rules
+  forward_to    = [loki.process.traefik.receiver]
+}
+
+// 4. Linhas do Traefik: separa o log de ACESSO (uma linha JSON por
+//    requisição, ver accessLog em traefik/traefik.yml) do log do PRÓPRIO
+//    Traefik (texto: erros de ACME, de roteamento...). As outras linhas
+//    passam direto, sem mudança.
+loki.process "traefik" {
+  forward_to = [loki.write.loki.receiver]
+
+  // Log de acesso: começa com "{".
+  stage.match {
+    selector = "{servico=\"traefik\"} |~ \"^\\\\{\""
+
+    stage.static_labels {
+      values = { tipo = "acesso" }
+    }
+
+    // Rótulo "router" vem do RouterName (ex.: conan-torres@docker): conjunto
+    // FECHADO, só os routers configurados. NUNCA do RequestHost: o Host vem
+    // do cliente, e bots mandando qualquer Host explodiriam o número de
+    // streams. Requisição que não casou com nenhum router (404 da borda) não
+    // tem RouterName e fica sem o rótulo.
+    stage.json {
+      expressions = { router = "RouterName" }
+    }
+
+    stage.labels {
+      values = { router = "" }
+    }
+  }
+
+  // Log do próprio Traefik: tudo que não é JSON.
+  stage.match {
+    selector = "{servico=\"traefik\"} !~ \"^\\\\{\""
+
+    stage.static_labels {
+      values = { tipo = "traefik" }
+    }
+  }
+}
+
+// 5. Envio ao Loki da borda, pela rede interna "logs" (fora da rede "proxy").
+loki.write "loki" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

@@ -15,3 +15,14 @@ services:
       - "traefik.http.routers.sem-label.rule=Host(`${HOST_SEM_LABEL:?}`)"
       - "traefik.http.routers.sem-label.entrypoints=websecure"
       - "traefik.http.services.sem-label.loadbalancer.server.port=80"
+
+  # Container comum de um "site" que só escreve no log: uma linha marcada no
+  # stdout e outra no stderr a cada 2 s. O smoke test (07-logs.sh) procura
+  # essas linhas no Loki, com os rótulos do compose (projeto/servico).
+  # Usa a imagem do Traefik (tem sh), lida do container em execução pelo
+  # smoke.sh: a tag fica só no docker-compose.yml da raiz.
+  marcador:
+    image: ${IMAGEM_TRAEFIK:?definida pelo testes/smoke.sh}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "while :; do echo marca-logs-07; echo marca-logs-07-erro >&2; sleep 2; done"

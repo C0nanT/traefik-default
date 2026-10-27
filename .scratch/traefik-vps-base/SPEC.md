@@ -112,6 +112,12 @@ Antes de ir para a VPS, ajusto bbcontainer e conan-torres para o novo contrato. 
 - bbcontainer: rede `traefik`→`proxy`; emissor →`le-http`; remover labels próprias de HTTP→HTTPS e de regex www; usar peças compartilhadas; manter healthcheck e imagem GHCR existentes.
 - conan-torres: criar workflow de build/push para o GHCR (inspirado no do bbcontainer); compose de produção usando a imagem, sem `ports: 8080`, com `expose`, rede `proxy`, healthcheck, labels com `le-dns`; manter o volume nomeado do SQLite e as variáveis secretas no `.env` da VPS. Avaliar se o conan-torres precisa de um endpoint de health (o bbcontainer usa `/api/health`).
 
+**Logs na borda (Loki e Alloy, adicionado depois da entrega, 2026-10-27)**
+- Exceção consciente à regra "monitoramento fora da VPS": o Loki é o **primeiro armazenamento de monitoramento na VPS** (até então só exporters leves, como o node exporter). O log nasce na VPS e, guardado no PC, se perderia com o PC desligado. Grafana, fonte de dados e painéis continuam no `homelab-monitoring`, que consulta pelo túnel SSH. Spec completa: `homelab-monitoring/.scratch/logs-no-grafana/SPEC.md`.
+- Loki monolítico, volume nomeado, sem autenticação, retenção de 30 dias com compactor, limites de ingestão e de memória; publicado só em `127.0.0.1:3100`, numa rede própria (`logs`), fora da rede `proxy`.
+- Alloy lê os logs de todos os containers pela API do Docker via `docker-socket-proxy` (só leitura; o proxy passou a liberar também `NETWORKS`, exigido pela descoberta do Alloy, ainda só GET). Rótulos `projeto`, `servico`, `stream`; nas linhas do Traefik, `tipo` (`acesso`/`traefik`) e `router` (do `RouterName`, nunca do `RequestHost`).
+- O usuário `metricas` ganha `permitopen="127.0.0.1:3100"`.
+
 ## Testing Decisions
 
 - Um bom teste aqui verifica o comportamento externo do proxy (o que um visitante ou atacante observa via HTTP/TLS), não a estrutura dos arquivos de configuração.
