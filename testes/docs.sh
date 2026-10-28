@@ -188,4 +188,32 @@ tem README.md 'docker login ghcr.io` do root' "README: deploy-vps usa o docker l
 tem README.md '.github/workflows/deploy-borda.yml' "README: aponta o workflow de deploy da borda"
 tem README.md 'Run workflow' "README: deploy da borda pelo botão Run workflow"
 tem README.md 'github-actions' "README: Dependabot também vigia as actions"
+# Guia (ticket 07): CI por SSH para os sites com marcador; cron para os demais.
+tem $G '.deploy-pelo-ci' "guia: CI por SSH para sites com .deploy-pelo-ci"
+tem $G 'Pelo cron (os demais sites)' "guia: cron como caminho dos demais sites"
+tem $G 'Deploy pelo CI (usuário `deploy`)' "guia aponta a seção do README"
+nao_tem $G 'GitHub Actions por SSH (evolução)' "guia: CI por SSH deixa de ser evolução"
+# Checklist do primeiro deploy na ordem segura da SPEC (instalar → secrets → marcador → job).
+tem README.md '### Checklist do primeiro deploy' "README: checklist do primeiro deploy"
+ordem() { # arquivo antes depois descrição
+  local a b
+  a=$(grep -nF -- "$2" "$1" | head -1 | cut -d: -f1)
+  b=$(grep -nF -- "$3" "$1" | head -1 | cut -d: -f1)
+  if [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]; then
+    echo "ok    $4"
+  else
+    echo "FALHA $4 ($2 deveria vir antes de $3)"
+    falhas=$((falhas + 1))
+  fi
+}
+ordem README.md '**1. Instalar na VPS**' '**2. Environments e secrets**' "checklist: instalar na VPS antes dos secrets"
+ordem README.md '**2. Environments e secrets**' '**3. Marcador da pasta do site**' "checklist: secrets antes do marcador"
+ordem README.md '**3. Marcador da pasta do site**' '**4. Mesclar o job do conan-torres**' "checklist: marcador antes do job"
+ordem README.md '**4. Mesclar o job do conan-torres**' '**5. Primeiro deploy**' "checklist: job antes do primeiro deploy"
+ordem README.md '**5. Primeiro deploy**' '**6. Falha forçada e e-mail**' "checklist: falha forçada por último"
+tem README.md 'sudo touch /opt/apps/conan-torres/.deploy-pelo-ci' "checklist: marcador da pasta do conan-torres"
+tem README.md 'linhas novas de `conan-torres`' "checklist: cron deixa o conan-torres de fora"
+tem README.md 'ERRO: SHA inválido' "checklist: chave de outro repositório recusada"
+tem README.md 'Only notify for failed workflows' "checklist: e-mail só para execução que falha"
+tem README.md 'IMAGE_TAG=<sha>' "checklist: falha forçada com IMAGE_TAG"
 exit $((falhas > 0))
