@@ -51,7 +51,13 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 - **Logs no Grafana (Loki e Alloy na borda).** Spec em `homelab-monitoring/.scratch/logs-no-grafana/SPEC.md`. Neste repositório: Loki (`127.0.0.1:3100`, 30 dias, fora da rede `proxy`) e Alloy (lê o Docker só pelo `socket-proxy`, descarta o ruído do próprio proxy) no `docker-compose.yml`, smoke em `testes/verificacoes/07-logs.sh`, README em "Logs (Loki e Alloy)". **Primeiro armazenamento de monitoramento na VPS** (exceção registrada na SPEC). No ar desde 2026-10-27: `permitopen="127.0.0.1:3100"` no `authorized_keys` do `metricas` (8080 segue recusada), Loki ~80 MiB e Alloy ~70 MiB de RAM, linhas de acesso dos 4 routers e da aplicação no painel Logs do Grafana, e o log continua chegando depois de recriar o container (`bbcontainer`, `--force-recreate`).
 
 **Melhorias (quando quiser):**
-3. Firewall: aceitar 80/443 no `ufw` só das faixas da Cloudflare (opcional; o `bbcontainermodular.com` não passa pela Cloudflare, então exige regras por destino). A nuvem laranja em si está concluída (issue #1, 2026-10-27).
+3. **Sugestão futura (adiada em 2026-10-28):** aceitar só a Cloudflare no `conantorres.dev`. A nuvem laranja em si está concluída (issue #1, 2026-10-27).
+   - **Por que não pelo `ufw`:** ele não vê o domínio, e os dois sites dividem o IP e as portas 80/443.
+   - **O ideal:** mover o `bbcontainermodular.com` para a Cloudflare e aí fechar 80/443 no `ufw`. Hoje está fora de cogitação.
+   - **Alternativas só no Traefik**, para os routers do `conantorres.dev`:
+     - middleware `ipAllowList` com as faixas da Cloudflare (simples, mas duplica a lista do `trustedIPs`);
+     - ou Authenticated Origin Pulls (`tls.options` com `clientAuth`).
+   - **Ganho limitado:** o IP da VPS já é público pelo bbcontainer, e nenhuma das duas segura DDoS. O que se ganha é impedir quem pula o WAF e o cache da Cloudflare.
 4. Deploy pelo CI via SSH (hoje o cron cobre, com atraso de até 10 min e erro só no log da VPS).
 5. Token da Cloudflare por arquivo (`CF_DNS_API_TOKEN_FILE`) em vez de variável de ambiente.
 6. Backup do volume `conan-torres_leitor-data` (SQLite do leitor) e de `/opt/traefik/acme/`.
