@@ -184,4 +184,26 @@ tem "$falha_forcada" 'Cron de deploy parado' "checklist da falha: alerta de cron
 tem "$falha_forcada" 'sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron /etc/cron.d/atualizar-apps' "checklist da falha: religa o cron"
 tem "$falha_forcada" 'resolvido' "checklist da falha: confere o alerta resolvido"
 tem README.md '[Checklist da falha forçada](#checklist-manual-da-falha-forçada)' "README: índice aponta o checklist da falha forçada"
+# Acesso à VPS pelo apelido `ssh vps` (README).
+# Fora desta conferência ficam os exemplos do túnel de métricas
+# (metricas@IP_DA_VPS, chave id_tunel): rodam no homelab, com outro usuário e outra chave.
+acesso="$tmp/README-acesso-vps"
+secao_readme "Acesso à VPS (ssh vps)" > "$acesso"
+tem README.md '`ssh vps`' "README: ponteiro para o apelido ssh vps"
+tem README.md '(#acesso-à-vps-ssh-vps)' "README: ponteiro aponta o bloco Host vps"
+topo=$(head -n 12 README.md)
+case $topo in *'ssh vps'*) echo "ok    README: ponteiro ssh vps perto do topo" ;; *) echo "FALHA README: ponteiro ssh vps deve ficar nas primeiras 12 linhas"; falhas=$((falhas + 1)) ;; esac
+tem "$acesso" 'Host vps' "acesso: bloco Host vps"
+tem_re "$acesso" '^ +HostName IP_DA_VPS$' "acesso: HostName com o placeholder IP_DA_VPS"
+tem_re "$acesso" '^ +User root$' "acesso: User root"
+tem_re "$acesso" '^ +IdentityFile ~/\.ssh/id_ed25519$' "acesso: IdentityFile da chave"
+tem_re "$acesso" '^ +IdentitiesOnly yes$' "acesso: IdentitiesOnly"
+tem_re "$acesso" '^ +PasswordAuthentication no$' "acesso: só chave, sem senha"
+tem_re "$acesso" '^ +StrictHostKeyChecking (yes|accept-new)$' "acesso: confere a chave do servidor"
+tem "$acesso" 'só leitura' "acesso: regra de só leitura para o agente"
+tem "$acesso" 'o dono' "acesso: mudanças na VPS são rodadas pelo dono"
+# Exemplos de acesso pelo PC: sem usuario@IP_DA_VPS (o túnel de métricas, metricas@IP_DA_VPS, fica de fora).
+nao_tem README.md 'usuario@IP_DA_VPS' "README: acesso pelo PC sem IP direto (usuario@IP_DA_VPS)"
+tem README.md 'ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 -L 9100:127.0.0.1:9100 -L 3100:127.0.0.1:3100 vps' "README: túnel do painel usa ssh vps"
+tem README.md 'metricas@IP_DA_VPS' "README: túnel de métricas mantém metricas@IP_DA_VPS"
 exit $((falhas > 0))
