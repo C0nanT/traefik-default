@@ -11,6 +11,7 @@ A VPS se acessa com `ssh vps` (bloco pronto para o `~/.ssh/config` em
 Índice: [Acesso à VPS](#acesso-à-vps-ssh-vps) ·
 [Checklist da VPS](#checklist-da-vps) ·
 [Subir a pilha](#subir-a-pilha) ·
+[Hook de pre-commit](#hook-de-pre-commit) ·
 [Fixar e atualizar a versão do Traefik](#fixar-e-atualizar-a-versão-do-traefik) ·
 [Plugar um site](docs/como-plugar-um-projeto.md) ·
 [Painel e métricas](#painel-e-métricas-via-túnel-ssh) ·
@@ -133,6 +134,23 @@ trocar só essa variável e rodar
 Depois, plugue cada site seguindo o
 [guia de integração](docs/como-plugar-um-projeto.md). Verificação rápida sem
 subir nada: `docker compose config -q`.
+
+## Hook de pre-commit
+
+O repositório traz um hook versionado em `.githooks/pre-commit` que roda o
+`testes/docs.sh` e o `testes/deploy.sh`, nessa ordem. Os dois são rápidos e não
+sobem contêineres nem tocam no Docker real. O smoke fica de fora (sobe a borda
+inteira). Se algum falhar, o commit é recusado e a saída mostra as linhas
+`FALHA`. Não há CI de propósito: o `docs.sh` reprova arquivos em
+`.github/workflows`, então esta é a única verificação automática.
+
+Ative uma vez por clone (inclusive em `/opt/traefik`, se commitar lá):
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Numa emergência, pule o hook com `git commit --no-verify`.
 
 ## Fixar e atualizar a versão do Traefik
 
