@@ -5,7 +5,11 @@ automático (Let's Encrypt), peças de segurança reaproveitáveis e um contrato
 simples para plugar sites. Cada site vive no próprio repositório e entra pelo
 [guia de integração](docs/como-plugar-um-projeto.md).
 
-Índice: [Checklist da VPS](#checklist-da-vps) ·
+A VPS se acessa com `ssh vps` (bloco pronto para o `~/.ssh/config` em
+[Acesso à VPS](#acesso-à-vps-ssh-vps)).
+
+Índice: [Acesso à VPS](#acesso-à-vps-ssh-vps) ·
+[Checklist da VPS](#checklist-da-vps) ·
 [Subir a pilha](#subir-a-pilha) ·
 [Fixar e atualizar a versão do Traefik](#fixar-e-atualizar-a-versão-do-traefik) ·
 [Plugar um site](docs/como-plugar-um-projeto.md) ·
@@ -14,6 +18,30 @@ simples para plugar sites. Cada site vive no próprio repositório e entra pelo
 [Checklist da falha forçada](#checklist-manual-da-falha-forçada) ·
 [Certificados](#certificados-lets-encrypt) ·
 [Próximos passos](#próximos-passos)
+
+## Acesso à VPS (ssh vps)
+
+Cole no `~/.ssh/config` do seu computador (o arquivo não é versionado) e
+troque `IP_DA_VPS` pelo endereço da VPS. Só endereço, usuário e caminho da
+chave: nenhum segredo vai aqui.
+
+```
+Host vps
+    HostName IP_DA_VPS
+    User root
+    IdentityFile ~/.ssh/id_ed25519
+    IdentitiesOnly yes
+    PasswordAuthentication no
+    StrictHostKeyChecking accept-new
+```
+
+`PasswordAuthentication no` e `IdentitiesOnly yes` deixam só a chave valer.
+`StrictHostKeyChecking accept-new` grava a chave do servidor no primeiro
+acesso e recusa a conexão se ela mudar depois. Teste com `ssh vps true`.
+
+O agente roda na VPS só comandos de leitura (`docker compose ps`,
+`docker compose logs`, `cat`, `ls`). Qualquer mudança lá (`up -d`,
+`git pull`, `install`, editar arquivo) é rodada pelo dono.
 
 ## Checklist da VPS
 
@@ -187,7 +215,7 @@ servidor, por um túnel SSH.
 No seu computador:
 
 ```bash
-ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 -L 9100:127.0.0.1:9100 -L 3100:127.0.0.1:3100 usuario@IP_DA_VPS
+ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 -L 9100:127.0.0.1:9100 -L 3100:127.0.0.1:3100 vps
 ```
 
 Com o túnel aberto, no seu navegador/terminal:
