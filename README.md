@@ -539,6 +539,9 @@ o site. Marque cada item ao validar.
 - [ ] A chave privada foi apagada do PC (passo 8).
 
 **3. Marcador da pasta do site** (antes do passo 4)
+- [ ] Script do cron reinstalado a partir do `/opt/traefik` atualizado (o
+      antigo não conhece o marcador):
+      `sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh /usr/local/bin/atualizar-apps.sh`.
 - [ ] `sudo touch /opt/apps/conan-torres/.deploy-pelo-ci` na VPS.
 - [ ] A próxima rodada do cron não deixa linhas novas de `conan-torres` em
       `/var/log/atualizar-apps.log`.
