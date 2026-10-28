@@ -11,7 +11,7 @@
 
 **Blocked by:** 02, 03
 
-Status: ready-for-agent
+Status: ready-for-human
 
 - [x] README: instalar o script, criar `deploy` (shell `/bin/sh`, fora do grupo `docker`), sudoers restrito ao script + argumentos com `env_keep` de `SSH_ORIGINAL_COMMAND`
 - [x] README: linhas do `authorized_keys` com `restrict` e `command=` por projeto, uma chave por repositório

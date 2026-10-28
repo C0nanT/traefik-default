@@ -11,10 +11,10 @@
 
 **Blocked by:** None (can start immediately)
 
-Status: ready-for-agent
+Status: ready-for-human
 
-- [ ] Pasta com `.deploy-pelo-ci` é pulada: nenhum `pull`/`up` chamado nela
-- [ ] Pasta sem marcador continua recebendo `pull` + `up -d`, como hoje
-- [ ] Sem as variáveis de ambiente novas, o script usa exatamente os caminhos de produção de hoje (`/opt/apps`, trava atual)
-- [ ] Teste novo roda sem VPS, sem rede e sem as portas do smoke, sai com código ≠ 0 se alguma verificação falhar
-- [ ] README da borda cita o marcador na parte do cron
+- [x] Pasta com `.deploy-pelo-ci` é pulada: nenhum `pull`/`up` chamado nela
+- [x] Pasta sem marcador continua recebendo `pull` + `up -d`, como hoje
+- [x] Sem as variáveis de ambiente novas, o script usa exatamente os caminhos de produção de hoje (`/opt/apps`, trava atual)
+- [x] Teste novo roda sem VPS, sem rede e sem as portas do smoke, sai com código ≠ 0 se alguma verificação falhar
+- [x] README da borda cita o marcador na parte do cron

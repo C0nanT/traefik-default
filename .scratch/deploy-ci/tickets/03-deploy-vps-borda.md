@@ -11,11 +11,11 @@
 
 **Blocked by:** 02 (Script de deploy de um site…)
 
-Status: ready-for-agent
+Status: ready-for-human
 
-- [ ] Mudança local no git → recusa sem `pull` nem `up`
-- [ ] `pull` que não é fast-forward → falha sem `up`
-- [ ] Log mostra commit de antes e de depois
-- [ ] Traefik, Loki ou Alloy não ficando de pé no prazo → falha com mensagem
-- [ ] Caminho feliz → código 0
-- [ ] Casos acima cobertos pelo teste local
+- [x] Mudança local no git → recusa sem `pull` nem `up`
+- [x] `pull` que não é fast-forward → falha sem `up`
+- [x] Log mostra commit de antes e de depois
+- [x] Traefik, Loki ou Alloy não ficando de pé no prazo → falha com mensagem
+- [x] Caminho feliz → código 0
+- [x] Casos acima cobertos pelo teste local

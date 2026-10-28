@@ -13,9 +13,9 @@
 
 Status: ready-for-agent
 
-- [ ] Job `needs: build-push` com as mesmas condições de gatilho
-- [ ] Manda o SHA exato que o `build-push` usou
-- [ ] Environment `producao`, secrets nomeados no ticket 04, `ssh` direto sem action de terceiros
-- [ ] `curl` em https://conantorres.dev exige 200
-- [ ] README/AGENTS atualizados (deploy pelo CI, marcador, `IMAGE_TAG` trava)
+- [x] Job `needs: build-push` com as mesmas condições de gatilho
+- [x] Manda o SHA exato que o `build-push` usou
+- [x] Environment `producao`, secrets nomeados no ticket 04, `ssh` direto sem action de terceiros
+- [x] `curl` em https://conantorres.dev exige 200
+- [x] README/AGENTS atualizados (deploy pelo CI, marcador, `IMAGE_TAG` trava)
 - [ ] YAML validado localmente; CI do conan-torres continua verde

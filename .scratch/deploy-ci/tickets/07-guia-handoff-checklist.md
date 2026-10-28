@@ -11,9 +11,9 @@
 
 **Blocked by:** 05, 06
 
-Status: ready-for-agent
+Status: ready-for-human
 
-- [ ] Guia: seção "Deploy" descreve CI e cron como são
-- [ ] README: checklist manual na ordem segura, com todos os itens listados
-- [ ] HANDOFF: item 4 marcado como fechado com resumo
-- [ ] `docs.sh` confere guia e checklist e passa
+- [x] Guia: seção "Deploy" descreve CI e cron como são
+- [x] README: checklist manual na ordem segura, com todos os itens listados
+- [x] HANDOFF: item 4 marcado como fechado com resumo
+- [x] `docs.sh` confere guia e checklist e passa

@@ -11,14 +11,14 @@
 
 **Blocked by:** 01 (O cron pula os sites marcados…)
 
-Status: ready-for-agent
+Status: ready-for-human
 
-- [ ] Projeto fora da lista fixa (`conan-torres`, `traefik`) é recusado sem chamar `docker`
-- [ ] SHA ausente, não hexadecimal ou de tamanho errado é recusado sem chamar `docker`
-- [ ] `IMAGE_TAG` no `.env` → recusa com mensagem de versão travada, sem `pull` nem `up`
-- [ ] Container que não fica `healthy` no prazo → falha com mensagem
-- [ ] Digest de `latest` diferente do da tag do SHA → falha com mensagem
-- [ ] Caminho feliz: `pull`, `up -d`, healthy, digest igual → código 0
-- [ ] Usa a mesma trava do cron (espera limitada, não desiste na hora)
-- [ ] Raízes e trava substituíveis por variável de ambiente só para teste; padrão = produção
-- [ ] Todos os casos acima cobertos pelo teste local
+- [x] Projeto fora da lista fixa (`conan-torres`, `traefik`) é recusado sem chamar `docker`
+- [x] SHA ausente, não hexadecimal ou de tamanho errado é recusado sem chamar `docker`
+- [x] `IMAGE_TAG` no `.env` → recusa com mensagem de versão travada, sem `pull` nem `up`
+- [x] Container que não fica `healthy` no prazo → falha com mensagem
+- [x] Digest de `latest` diferente do da tag do SHA → falha com mensagem
+- [x] Caminho feliz: `pull`, `up -d`, healthy, digest igual → código 0
+- [x] Usa a mesma trava do cron (espera limitada, não desiste na hora)
+- [x] Raízes e trava substituíveis por variável de ambiente só para teste; padrão = produção
+- [x] Todos os casos acima cobertos pelo teste local

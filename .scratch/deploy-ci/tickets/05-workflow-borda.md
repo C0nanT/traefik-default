@@ -11,7 +11,7 @@
 
 **Blocked by:** 04
 
-Status: done
+Status: ready-for-human
 
 - [x] Workflow só com `workflow_dispatch`; nenhum gatilho de push/PR
 - [x] Recusa ref diferente de `main`
@@ -20,4 +20,4 @@ Status: done
 - [x] `curl` nos dois domínios, falha se algum não responder com sucesso
 - [x] Dependabot cobre `github-actions` com mensal, `default-days: 14` e grupo
 - [x] `docs.sh` barra workflow de auto-merge mas aceita o de deploy; confere os itens acima
-- [ ] YAML validado localmente; smoke da borda continua passando
+- [x] YAML validado localmente; smoke da borda continua passando
