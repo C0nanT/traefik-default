@@ -29,6 +29,10 @@ tem_re() { # arquivo regex-estendida descrição
     falhas=$((falhas + 1))
   fi
 }
+# secao_readme "título" [fora]: imprime a seção "## título" do README (com "fora", o README sem ela).
+secao_readme() {
+  awk -v t="## $1" -v fora="${2:-}" '/^## /{on=($0 == t)} (fora == "") ? on : !on' README.md
+}
 G=docs/como-plugar-um-projeto.md
 for n in web websecure proxy le-dns le-http 'seguranca@file' 'compressao@file' 'www-para-raiz@file'; do
   tem $G "$n" "guia lista $n"
@@ -130,7 +134,7 @@ tem README.md 'Loki da borda:' "README: aprovar PR do Loki atualiza a nota de ve
 # de .scratch (histórico) e deste arquivo.
 # O README só pode citá-los no roteiro de limpeza ("Limpar o deploy por SSH").
 sem_limpeza="$tmp/README-sem-limpeza"
-awk '/^## /{on=($0 == "## Limpar o deploy por SSH")} !on' README.md > "$sem_limpeza"
+secao_readme "Limpar o deploy por SSH" fora > "$sem_limpeza"
 for padrao in deploy-vps .deploy-pelo-ci; do
   restos=$(grep -rIlF --exclude-dir=.git --exclude-dir=.scratch --exclude=docs.sh --exclude=README.md -- "$padrao" . 2>/dev/null)
   grep -qF -- "$padrao" "$sem_limpeza" && restos="$restos README.md"
@@ -153,13 +157,19 @@ tem README.md 'gh api -X DELETE repos/C0nanT/conantorres.dev/environments/produc
 # Log do cron no Loki (ticket 03).
 tem alloy/config.alloy 'loki.source.file "atualizar_apps"' "Alloy lê o log do cron (loki.source.file)"
 tem_re alloy/config.alloy 'job +=  *"atualizar-apps"' "Alloy rotula o log do cron com job=atualizar-apps"
-tem docker-compose.yml '${LOG_CRON_DIR:-/var/log}:/log-host:ro' "compose monta a pasta do log do cron só leitura"
+tem docker-compose.yml '${LOG_CRON_DIR:-/var/log/atualizar-apps}:/log-host:ro' "compose monta só a pasta dedicada do log do cron, só leitura"
+nao_tem docker-compose.yml '${LOG_CRON_DIR:-/var/log}:' "compose não monta /var/log inteiro"
+tem vps/atualizar-apps.logrotate '/var/log/atualizar-apps/atualizar-apps.log {' "logrotate: caminho na pasta dedicada"
+tem vps/atualizar-apps.logrotate 'delaycompress' "logrotate: delaycompress (o Alloy termina o arquivo rotacionado)"
+tem vps/atualizar-apps.sh 'mkdir -p' "script cria a pasta do log se faltar"
+tem README.md 'sudo install -d -m 755 /var/log/atualizar-apps' "README: migração única cria a pasta do log"
+tem README.md 'sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron' "README: migração reinstala o cron.d"
 tem vps/atualizar-apps.logrotate 'create 0644 root root' "logrotate recria o log legível pelo Alloy"
 tem README.md '{job="atualizar-apps"}' "README: consulta LogQL do log do cron"
 tem testes/verificacoes/08-log-cron.sh 'job=atualizar-apps' "smoke confere a linha do cron no Loki com o rótulo"
 # Checklist manual da falha forçada: os passos ficam só nessa seção.
 falha_forcada="$tmp/README-falha-forcada"
-awk '/^## /{on=($0 == "## Checklist manual da falha forçada")} on' README.md > "$falha_forcada"
+secao_readme "Checklist manual da falha forçada" > "$falha_forcada"
 tem "$falha_forcada" 'cd /opt/traefik && git pull' "checklist da falha: git pull em /opt/traefik"
 tem "$falha_forcada" 'sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh /usr/local/bin/atualizar-apps.sh' "checklist da falha: reinstala o script do cron"
 tem "$falha_forcada" 'sudo install -m 644 /opt/traefik/vps/atualizar-apps.logrotate /etc/logrotate.d/atualizar-apps' "checklist da falha: reinstala o logrotate do cron"

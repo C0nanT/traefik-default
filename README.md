@@ -60,7 +60,8 @@ Faça uma vez por servidor (Debian/Ubuntu; ajuste ao seu sistema).
    `vps/atualizar-apps.sh` roda `docker compose pull && up -d` em cada
    `/opt/apps/*/` (só recria o que mudou) e limpa imagens antigas. Push na
    `main` de um site → no ar em até ~10 min depois do CI. Log só de mudanças
-   e erros em `/var/log/atualizar-apps.log`, com rotação semanal:
+   e erros em `/var/log/atualizar-apps/atualizar-apps.log` (pasta só do cron,
+   criada pelo script se faltar), com rotação semanal:
    ```bash
    sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh /usr/local/bin/atualizar-apps.sh
    sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron /etc/cron.d/atualizar-apps
@@ -277,10 +278,11 @@ linha e sai na consulta com `| json`):
 | `tipo` | `acesso`, `traefik` | só nas linhas do Traefik: JSON de acesso ou log próprio |
 | `router` | ex.: `conan-torres@docker` | só nas linhas de acesso, do campo `RouterName` |
 
-O log do cron (`/var/log/atualizar-apps.log`) não vem de container: o Alloy
-o lê do arquivo, montado só leitura (a pasta `/var/log`, para sobreviver à
-rotação do logrotate), e o envia com **um** rótulo, `job="atualizar-apps"`,
-sem os de cima. No Grafana ou no `curl` abaixo: `{job="atualizar-apps"}`, ou
+O log do cron (`/var/log/atualizar-apps/atualizar-apps.log`) não vem de
+container: o Alloy o lê do arquivo, montado só leitura (a pasta dedicada
+`/var/log/atualizar-apps`, não o `/var/log` todo, para sobreviver à rotação
+do logrotate), e o envia com `job="atualizar-apps"` e o `filename` que o
+próprio `loki.source.file` acrescenta, sem os rótulos de cima. No Grafana ou no `curl` abaixo: `{job="atualizar-apps"}`, ou
 `{job="atualizar-apps"} |= "ERRO"` para só os erros.
 
 O `router` vem do `RouterName` (os routers configurados, um conjunto
@@ -453,14 +455,21 @@ VPS; os de conferir no painel são no PC (o Grafana fica no
    ```bash
    cd /opt/traefik && git pull
    ```
-2. **Reinstale o script e o logrotate do cron.** A cópia instalada não se
-   atualiza com o `git pull`:
+2. **Reinstale o script, o cron e o logrotate.** A cópia instalada não se
+   atualiza com o `git pull`. **Migração única do log:** ele saiu de
+   `/var/log/atualizar-apps.log` para a pasta própria
+   `/var/log/atualizar-apps/` (o Alloy monta só ela, não o `/var/log` todo).
+   Crie a pasta e reinstale os três arquivos (o cron e o logrotate apontam
+   para o caminho novo); o log antigo pode ser removido:
    ```bash
+   sudo install -d -m 755 /var/log/atualizar-apps
    sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh /usr/local/bin/atualizar-apps.sh
+   sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron /etc/cron.d/atualizar-apps
    sudo install -m 644 /opt/traefik/vps/atualizar-apps.logrotate /etc/logrotate.d/atualizar-apps
+   sudo rm -f /var/log/atualizar-apps.log   # o log do caminho antigo
    ```
 3. **Suba a borda de novo**, para o Alloy ganhar o volume do log do cron
-   (`/var/log` montada em `/log-host`). Confira que o Alloy ficou `healthy`:
+   (`/var/log/atualizar-apps` montada em `/log-host`). Confira que o Alloy ficou `healthy`:
    ```bash
    cd /opt/traefik && docker compose up -d
    docker compose ps alloy
@@ -485,7 +494,7 @@ VPS; os de conferir no painel são no PC (o Grafana fica no
    uma linha. Espere até 10 min (a próxima rodada). O `pull` falha, o `up`
    não roda e o site segue no ar com a imagem atual. A rodada grava
    `deploy_falhou{app="<projeto>"} 1` e o log ganha
-   `ERRO <projeto>: ...` (`tail -3 /var/log/atualizar-apps.log`). Em até
+   `ERRO <projeto>: ...` (`tail -3 /var/log/atualizar-apps/atualizar-apps.log`). Em até
    cerca de 11 min o Telegram recebe **Deploy falhou (VPS)** com o nome do
    site. No painel, o site aparece como `falhou`.
 6. **Desfaça.** Tire a linha `IMAGE_TAG` que você acrescentou, ou volte o

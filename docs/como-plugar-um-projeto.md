@@ -123,7 +123,7 @@ precisa de `service=<serviço do site>`, porque o redirect não chega ao app.
 instalação no README, "Checklist da VPS") roda `pull` + `up -d` em cada
 `/opt/apps/*/`. Basta o site estar em `/opt/apps/<projeto>` e o CI publicar a
 imagem na tag que o compose usa (ex.: `latest`): push na `main` → no ar em até
-~10 min. Erros vão para `/var/log/atualizar-apps.log`. Deploy pelo CI via SSH
+~10 min. Erros vão para `/var/log/atualizar-apps/atualizar-apps.log`. Deploy pelo CI via SSH
 foi descartado (exigiria expor a porta 22) e o Watchtower também (projeto
 arquivado).
 

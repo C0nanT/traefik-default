@@ -2,7 +2,7 @@
 # Verificação do log do cron no Loki (Alloy lê o arquivo, Loki guarda).
 # Carregado pelo testes/smoke.sh; usa loki_streams/achar_streams do 07-logs.sh.
 #
-# O smoke monta uma pasta temporária (LOG_CRON_DIR) no lugar de /var/log;
+# O smoke monta uma pasta temporária (LOG_CRON_DIR) no lugar de /var/log/atualizar-apps;
 # aqui escrevemos nela uma linha no formato do cron e olhamos o Loki.
 
 secao "Log do cron: linha do arquivo chega ao Loki com o rótulo"

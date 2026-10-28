@@ -10,6 +10,12 @@ cd "$RAIZ_REPO" || exit 1
 FALHAS=0
 ok() { echo "ok    $1"; }
 falha() { echo "FALHA $1${2:+ ($2)}"; FALHAS=$((FALHAS + 1)); }
+# verifica "descrição" "detalhe se falhar" comando...: ok se o comando sair 0.
+verifica() {
+  local descricao=$1 detalhe=$2
+  shift 2
+  if "$@"; then ok "$descricao"; else falha "$descricao" "$detalhe"; fi
+}
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -17,7 +23,9 @@ trap 'rm -rf "$TMP"' EXIT
 # --- ambiente de cada cenário ------------------------------------------------
 # novo_cenario: zera $TMP/cenario com bin/ (docker falso), apps/ e chamadas.log.
 # O falso grava "docker <args> @<pasta atual>" no log; FALSO_SAIDA_DOCKER != 0
-# faz o docker falhar; FALSO_FALHA_EM=<pasta> faz falhar só naquela pasta.
+# faz o docker falhar; FALSO_FALHA_EM=<pasta> faz falhar só naquela pasta;
+# FALSO_MSG_ERRO é o texto (com \n) que o docker escreve ao falhar;
+# FALSO_MOUNTPOINT é a resposta de `docker volume inspect`.
 novo_cenario() {
   CEN="$TMP/cenario"
   rm -rf "$CEN"
@@ -26,8 +34,11 @@ novo_cenario() {
   {
     printf '#!/usr/bin/env bash\n'
     printf 'echo "docker $* @$(basename "$PWD")" >>%q\n' "$CEN/chamadas.log"
-    printf '[ "${FALSO_FALHA_EM:-}" = "$(basename "$PWD")" ] && exit 1\n'
-    printf 'exit "${FALSO_SAIDA_DOCKER:-0}"\n'
+    printf '[ "$1 $2" = "volume inspect" ] && { echo "${FALSO_MOUNTPOINT:-}"; exit 0; }\n'
+    printf 'if [ "${FALSO_FALHA_EM:-}" = "$(basename "$PWD")" ] || [ "${FALSO_SAIDA_DOCKER:-0}" != 0 ]; then\n'
+    printf '  [ -n "${FALSO_MSG_ERRO:-}" ] && printf "%%b\\n" "$FALSO_MSG_ERRO"\n'
+    printf '  exit 1\n'
+    printf 'fi\n'
   } >"$CEN/bin/docker"
   chmod +x "$CEN/bin/docker"
 }
@@ -38,12 +49,16 @@ site() {
   : >"$CEN/apps/$1/docker-compose.yml"
 }
 
-# roda_cron: executa o script do cron com o ambiente de teste.
+# roda_cron: executa o script do cron com o ambiente de teste. O log vai para
+# $CEN/saida.log (LOG_ARQUIVO). METRICAS_DIR=<vazio> não é passado: o script
+# descobre o diretório pelo docker (padrão de produção).
 roda_cron() {
   mkdir -p "$CEN/metricas"
-  PATH="$CEN/bin:$PATH" APPS_RAIZ="$CEN/apps" TRAVA_ARQUIVO="$CEN/trava" \
-    METRICAS_DIR="${METRICAS_DIR:-$CEN/metricas}" \
-    bash vps/atualizar-apps.sh >"$CEN/saida.log" 2>&1
+  local metricas=(METRICAS_DIR="${METRICAS_DIR-$CEN/metricas}")
+  [ -z "${METRICAS_DIR-x}" ] && metricas=()
+  env "${metricas[@]}" PATH="$CEN/bin:$PATH" APPS_RAIZ="$CEN/apps" \
+    TRAVA_ARQUIVO="$CEN/trava" LOG_ARQUIVO="${LOG_ARQUIVO:-$CEN/saida.log}" \
+    bash vps/atualizar-apps.sh >"$CEN/stdout.log" 2>&1
 }
 
 chamou() { grep -qE -- "$1" "$CEN/chamadas.log"; }
@@ -57,34 +72,33 @@ mkdir -p "$CEN/apps/sem-compose"
 roda_cron
 
 for app in bbcontainer conan-torres; do
-  if chamou "compose pull.*@$app\$" && chamou "compose up -d.*@$app\$"; then
-    ok "$app recebe pull + up -d"
-  else
-    falha "$app recebe pull + up -d" "$(cat "$CEN/chamadas.log")"
-  fi
+  verifica "$app recebe pull + up -d" "$(cat "$CEN/chamadas.log")" \
+    bash -c 'grep -qE -- "compose pull.*@$1\$" "$2" && grep -qE -- "compose up -d.*@$1\$" "$2"' _ "$app" "$CEN/chamadas.log"
 done
-if chamou '@sem-compose'; then
-  falha "pasta sem docker-compose.yml é ignorada" "$(cat "$CEN/chamadas.log")"
-else
-  ok "pasta sem docker-compose.yml é ignorada"
-fi
+verifica "pasta sem docker-compose.yml é ignorada" "$(cat "$CEN/chamadas.log")" \
+  bash -c '! grep -q "@sem-compose" "$1"' _ "$CEN/chamadas.log"
 
 novo_cenario
 site conan-torres
 FALSO_SAIDA_DOCKER=1 roda_cron
-if grep -q 'ERRO conan-torres' "$CEN/saida.log"; then
-  ok "docker que falha vira linha ERRO <site> no log"
-else
-  falha "docker que falha vira linha ERRO" "$(cat "$CEN/saida.log")"
-fi
+verifica "docker que falha vira linha ERRO <site> no log" "$(cat "$CEN/saida.log")" \
+  grep -q 'ERRO conan-torres' "$CEN/saida.log"
 
-# Sem as variáveis de ambiente, os caminhos são os de produção.
-if grep -qF '${APPS_RAIZ:-/opt/apps}' vps/atualizar-apps.sh \
-  && grep -qF '${TRAVA_ARQUIVO:-/run/atualizar-apps.lock}' vps/atualizar-apps.sh; then
-  ok "padrões de produção mantidos (/opt/apps e /run/atualizar-apps.lock)"
-else
-  falha "padrões de produção mantidos" "vps/atualizar-apps.sh"
-fi
+# Erro de várias linhas do docker: uma linha só no log, no formato <data> ERRO <app>: <mensagem>.
+novo_cenario
+site conan-torres
+FALSO_FALHA_EM=conan-torres FALSO_MSG_ERRO='primeira linha\nsegunda linha' roda_cron
+verifica "erro de 2 linhas do docker vira uma linha ERRO só" "$(cat "$CEN/saida.log")" \
+  grep -qE '^[0-9T:+-]+ ERRO conan-torres: primeira linha segunda linha *$' "$CEN/saida.log"
+verifica "o log do erro de 2 linhas tem uma linha só" "$(cat "$CEN/saida.log")" \
+  test "$(wc -l <"$CEN/saida.log")" -eq 1
+
+# O script cria a pasta do log se faltar (a do cron: /var/log/atualizar-apps).
+novo_cenario
+site conan-torres
+LOG_ARQUIVO="$CEN/log-novo/atualizar-apps.log" FALSO_SAIDA_DOCKER=1 roda_cron
+verifica "cria a pasta do log se faltar e escreve nela" "$(ls -R "$CEN" 2>&1)" \
+  grep -q 'ERRO conan-torres' "$CEN/log-novo/atualizar-apps.log"
 
 # --- métrica -----------------------------------------------------------------
 echo "== métrica (textfile do node exporter) =="
@@ -95,56 +109,53 @@ site bbcontainer
 site conan-torres
 roda_cron
 PROM="$CEN/$PROM_CRON"
-if grep -qx 'deploy_falhou{app="bbcontainer"} 0' "$PROM" \
-  && grep -qx 'deploy_falhou{app="conan-torres"} 0' "$PROM"; then
-  ok "todos ok: deploy_falhou 0 para cada site"
-else
-  falha "todos ok: deploy_falhou 0 para cada site" "$(cat "$PROM" 2>&1)"
-fi
-if grep -qE '^deploy_rodada_timestamp_seconds [0-9]{10}$' "$PROM"; then
-  ok "grava o horário Unix do fim da rodada"
-else
-  falha "grava o horário Unix do fim da rodada" "$(cat "$PROM" 2>&1)"
-fi
-if [ "$(ls "$CEN/metricas")" = "deploy.prom" ]; then
-  ok "gravação atômica: nenhum temporário sobrando"
-else
-  falha "gravação atômica: nenhum temporário sobrando" "$(ls -A "$CEN/metricas")"
-fi
+for app in bbcontainer conan-torres; do
+  verifica "todos ok: deploy_falhou 0 para $app" "$(cat "$PROM" 2>&1)" \
+    grep -qx "deploy_falhou{app=\"$app\"} 0" "$PROM"
+done
+verifica "grava o horário Unix do fim da rodada" "$(cat "$PROM" 2>&1)" \
+  grep -qE '^deploy_rodada_timestamp_seconds [0-9]{10}$' "$PROM"
+verifica "gravação atômica: nenhum temporário sobrando" "$(ls -A "$CEN/metricas")" \
+  test "$(ls "$CEN/metricas")" = "deploy.prom"
 
 novo_cenario
 site bbcontainer
 site conan-torres
 FALSO_FALHA_EM=conan-torres roda_cron
 PROM="$CEN/$PROM_CRON"
-if grep -qx 'deploy_falhou{app="conan-torres"} 1' "$PROM" \
-  && grep -qx 'deploy_falhou{app="bbcontainer"} 0' "$PROM" \
-  && grep -q 'ERRO conan-torres' "$CEN/saida.log"; then
-  ok "um site falhando: 1 só para ele e linha ERRO no log"
-else
-  falha "um site falhando: 1 só para ele e linha ERRO no log" "$(cat "$PROM" "$CEN/saida.log" 2>&1)"
-fi
+verifica "um site falhando: 1 só para ele" "$(cat "$PROM" 2>&1)" \
+  grep -qx 'deploy_falhou{app="conan-torres"} 1' "$PROM"
+verifica "um site falhando: o outro segue 0" "$(cat "$PROM" 2>&1)" \
+  grep -qx 'deploy_falhou{app="bbcontainer"} 0' "$PROM"
+verifica "um site falhando: linha ERRO no log" "$(cat "$CEN/saida.log")" \
+  grep -q 'ERRO conan-torres' "$CEN/saida.log"
+
+# Rótulo app com \ e " é escapado no .prom (nome de pasta é entrada do host).
+novo_cenario
+site 'a"b\c'
+roda_cron
+verifica "rótulo app escapa \\ e \" no .prom" "$(cat "$CEN/$PROM_CRON" 2>&1)" \
+  grep -qxF 'deploy_falhou{app="a\"b\\c"} 0' "$CEN/$PROM_CRON"
 
 # A métrica nunca atrapalha o deploy: diretório impossível de gravar.
 novo_cenario
 site conan-torres
 METRICAS_DIR="$CEN/nao-existe/nem-aqui" roda_cron
 codigo=$?
-if [ "$codigo" -eq 0 ] \
-  && chamou 'compose up -d.*@conan-torres$' \
-  && grep -q 'ERRO métrica' "$CEN/saida.log"; then
-  ok "falha ao gravar a métrica vira linha no log e não muda o deploy"
-else
-  falha "falha ao gravar a métrica não muda o deploy" "código $codigo: $(cat "$CEN/saida.log")"
-fi
+verifica "gravar a métrica falhando não muda o deploy (código 0 e up -d)" "código $codigo" \
+  bash -c '[ "$1" -eq 0 ] && grep -qE -- "compose up -d.*@conan-torres\$" "$2"' _ "$codigo" "$CEN/chamadas.log"
+verifica "falha ao gravar a métrica vira linha ERRO métrica no log" "$(cat "$CEN/saida.log")" \
+  grep -q 'ERRO métrica' "$CEN/saida.log"
 
 # Sem METRICAS_DIR, o diretório vem do volume real da borda, pelo Docker.
-if grep -qF 'docker volume inspect' vps/atualizar-apps.sh \
-  && grep -qF '${METRICAS_VOLUME:-traefik_textfile}' vps/atualizar-apps.sh; then
-  ok "padrão de produção: mountpoint do volume traefik_textfile"
-else
-  falha "padrão de produção: mountpoint do volume traefik_textfile" "vps/atualizar-apps.sh"
-fi
+novo_cenario
+site conan-torres
+mkdir -p "$CEN/volume-textfile"
+FALSO_MOUNTPOINT="$CEN/volume-textfile" METRICAS_DIR= roda_cron
+verifica "padrão de produção: deploy.prom no mountpoint do volume traefik_textfile" "$(cat "$CEN/chamadas.log"; ls -A "$CEN/volume-textfile")" \
+  test -f "$CEN/volume-textfile/deploy.prom"
+verifica "padrão de produção: pergunta ao docker pelo volume traefik_textfile" "$(cat "$CEN/chamadas.log")" \
+  grep -q 'volume inspect.*traefik_textfile' "$CEN/chamadas.log"
 
 if [ "$FALHAS" -gt 0 ]; then
   echo "$FALHAS verificação(ões) falharam"
