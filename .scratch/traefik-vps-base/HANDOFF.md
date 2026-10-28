@@ -58,7 +58,11 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
      - middleware `ipAllowList` com as faixas da Cloudflare (simples, mas duplica a lista do `trustedIPs`);
      - ou Authenticated Origin Pulls (`tls.options` com `clientAuth`).
    - **Ganho limitado:** o IP da VPS já é público pelo bbcontainer, e nenhuma das duas segura DDoS. O que se ganha é impedir quem pula o WAF e o cache da Cloudflare.
-4. Deploy pelo CI via SSH (hoje o cron cobre, com atraso de até 10 min e erro só no log da VPS).
+4. ~~Deploy pelo CI via SSH~~ **fechado em 2026-10-28:**
+   - Feito: `conantorres.dev` é publicado pelo CI por SSH (usuário `deploy`, comando forçado, Environment `producao`, checagem de `healthy` e de digest). O marcador `.deploy-pelo-ci` tira o site do cron. A borda sobe pelo botão "Run workflow" (`deploy-borda.yml`), sem deploy automático.
+   - Feito: checklist do primeiro deploy no README (seção "Deploy pelo CI"); guia atualizado; `docs.sh` e `deploy.sh` conferem.
+   - Descartado: runner do GitHub na VPS (roda código do workflow dentro da VPS).
+   - Falta só o dono rodar o checklist do primeiro deploy na VPS.
 5. Token da Cloudflare por arquivo (`CF_DNS_API_TOKEN_FILE`) em vez de variável de ambiente.
 6. Backup do volume `conan-torres_leitor-data` (SQLite do leitor) e de `/opt/traefik/acme/`.
 7. ~~Limpeza de código apontada na revisão~~ **fechada em 2026-10-28:**

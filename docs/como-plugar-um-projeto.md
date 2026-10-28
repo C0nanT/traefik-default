@@ -119,11 +119,22 @@ precisa de `service=<serviço do site>`, porque o redirect não chega ao app.
 
 ## Deploy
 
-**Automático (hoje).** Um cron na VPS (`vps/atualizar-apps.sh`, a cada
-10 min; instalação no README, "Checklist da VPS") roda `pull` + `up -d` em
-cada `/opt/apps/*/`. Basta o site estar em `/opt/apps/<projeto>` e o CI
-publicar a imagem na tag que o compose usa (ex.: `latest`): push na `main` →
-no ar em até ~10 min. Erros vão para `/var/log/atualizar-apps.log`.
+**Pelo CI (sites com `.deploy-pelo-ci`).** Logo depois que o CI publica a
+imagem, o próprio workflow entra na VPS por SSH e faz o deploy na hora. Ele
+espera o container ficar `healthy`, confere que está rodando a imagem do
+commit e faz `curl` na URL pública. Se algo falha, a execução fica vermelha no
+GitHub e o dono recebe um e-mail. Um site usa esse caminho quando a pasta
+`/opt/apps/<projeto>` tem o arquivo-marcador `.deploy-pelo-ci`. Os passos na
+VPS e no GitHub estão no README, em "Deploy pelo CI (usuário `deploy`)".
+Watchtower foi descartado (projeto arquivado).
+
+**Pelo cron (os demais sites).** Um cron na VPS (`vps/atualizar-apps.sh`, a
+cada 10 min; instalação no README, "Checklist da VPS") roda `pull` + `up -d`
+em cada `/opt/apps/*/` que **não** tem o `.deploy-pelo-ci`. Basta o site estar
+em `/opt/apps/<projeto>` e o CI publicar a imagem na tag que o compose usa
+(ex.: `latest`): push na `main` → no ar em até ~10 min. Erros vão para
+`/var/log/atualizar-apps.log`. Não use os dois caminhos no mesmo site: com o
+marcador, só o CI faz o deploy.
 
 **Manual (na hora, sem esperar o cron).** Na VPS:
 
@@ -132,12 +143,6 @@ cd /opt/apps/<projeto>
 docker compose pull && docker compose up -d
 docker compose ps     # o serviço deve aparecer como (healthy)
 ```
-
-**GitHub Actions por SSH (evolução).** Depois do push da imagem, um passo do
-workflow entra na VPS por SSH (chave dedicada, guardada em *secrets*, de
-preferência com usuário restrito) e roda os mesmos dois comandos acima. Troca
-a espera de até 10 min por deploy imediato e falha visível no CI. Watchtower
-foi descartado (projeto arquivado).
 
 ## Checklist antes de subir um site
 

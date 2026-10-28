@@ -516,6 +516,58 @@ Para revogar o acesso de um repositório, apague a linha dele no
 `authorized_keys` (ou `sudo deluser --remove-home deploy` para todos) e o
 secret `VPS_SSH_KEY` do Environment.
 
+### Checklist do primeiro deploy
+
+Siga a ordem. O CI do `conantorres.dev` só ganha o deploy pelo CI depois que
+a VPS e o GitHub estiverem prontos: antes disso, o cron continua atualizando
+o site. Marque cada item ao validar.
+
+**1. Instalar na VPS** (passos 1 a 5 acima)
+- [ ] `/usr/local/sbin/deploy-vps` instalado com `install -m 755`, a partir
+      do `/opt/traefik` já atualizado.
+- [ ] `id deploy` mostra só o grupo `deploy`, sem `docker` nem `sudo`.
+- [ ] `sudo -l -U deploy` lista só as duas linhas do `deploy-vps`.
+- [ ] `authorized_keys` tem uma linha por repositório, cada uma com
+      `restrict` e `command=`.
+- [ ] A impressão digital da VPS é igual à do `known_hosts-vps`.
+
+**2. Environments e secrets** (passo 6 acima)
+- [ ] Environment `producao` em `conantorres.dev` e em `traefik-default`,
+      com `Selected branches and tags` → `main`.
+- [ ] Os três secrets (`VPS_HOST`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`) estão no
+      Environment, não no repositório, e cada repositório tem a própria chave.
+- [ ] A chave privada foi apagada do PC (passo 8).
+
+**3. Marcador da pasta do site** (antes do passo 4)
+- [ ] `sudo touch /opt/apps/conan-torres/.deploy-pelo-ci` na VPS.
+- [ ] A próxima rodada do cron não deixa linhas novas de `conan-torres` em
+      `/var/log/atualizar-apps.log`.
+
+**4. Mesclar o job do conan-torres** (só depois dos itens 1 a 3)
+- [ ] O job de deploy do `conan-torres` está na `main`. Ele roda depois do
+      `build-push`, só na `main`, só depois do CI verde (ou de um disparo
+      manual na `main`).
+
+**5. Primeiro deploy**
+- [ ] Site: a execução da `main` do `conan-torres` fica verde, com o job de
+      deploy concluído, e `https://conantorres.dev/` responde 200.
+- [ ] Na VPS, `docker compose ps` em `/opt/apps/conan-torres` mostra
+      `(healthy)`.
+- [ ] Borda: Actions → **Deploy da borda** → **Run workflow** (branch `main`)
+      fica verde, e o log mostra o commit de antes e o de depois.
+- [ ] Chave de um repositório não faz deploy do outro: com a chave do
+      `conan-torres`, pedir `traefik` dá `ERRO: SHA inválido`.
+- [ ] Chave de um repositório não abre shell nem túnel (passo 7 acima).
+
+**6. Falha forçada e e-mail**
+- [ ] Na conta do dono: GitHub → Settings → Notifications → Actions, marcar
+      **Only notify for failed workflows** e deixar o e-mail ligado.
+- [ ] Com `IMAGE_TAG=<sha>` no `/opt/apps/conan-torres/.env`, rodar o deploy
+      do `conan-torres` na `main`: a execução fica vermelha e a mensagem diz
+      que a versão está travada.
+- [ ] O e-mail de falha chegou.
+- [ ] Tirar `IMAGE_TAG` do `.env` e rodar o deploy de novo: fica verde.
+
 ## Certificados (Let's Encrypt)
 
 ### Os dois emissores
