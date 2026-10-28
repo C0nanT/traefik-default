@@ -69,6 +69,18 @@ Faça uma vez por servidor (Debian/Ubuntu; ajuste ao seu sistema).
    atualizar na hora, sem esperar: `cd /opt/apps/<projeto> && docker compose
    pull && docker compose up -d`.
 
+   **Métrica do cron.** A cada rodada o script grava `deploy.prom` no volume
+   `textfile` da borda (`traefik_textfile`, achado pelo Docker; é o mesmo do
+   `loki_dados_bytes`), e o node exporter publica:
+   - `deploy_falhou{app="<pasta>"}`: 1 se o `pull` ou o `up` daquele site
+     falhou na rodada, 0 se deu certo;
+   - `deploy_rodada_timestamp_seconds`: horário Unix do fim da rodada.
+
+   A gravação é atômica. Se falhar, o log ganha uma linha `ERRO métrica: ...`
+   e o deploy segue igual. **A cópia em `/usr/local/bin` não se atualiza com
+   o `git pull`:** a cada mudança em `vps/atualizar-apps.sh`, reinstale com o
+   primeiro comando `install` acima.
+
 ## Subir a pilha
 
 ```bash
