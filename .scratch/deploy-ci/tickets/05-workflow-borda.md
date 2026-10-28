@@ -11,13 +11,13 @@
 
 **Blocked by:** 04
 
-Status: ready-for-agent
+Status: done
 
-- [ ] Workflow só com `workflow_dispatch`; nenhum gatilho de push/PR
-- [ ] Recusa ref diferente de `main`
-- [ ] Usa Environment `producao` e os secrets nomeados no ticket 04
-- [ ] `ssh` direto, `StrictHostKeyChecking=yes`, chave em arquivo temporário
-- [ ] `curl` nos dois domínios, falha se algum não responder com sucesso
-- [ ] Dependabot cobre `github-actions` com mensal, `default-days: 14` e grupo
-- [ ] `docs.sh` barra workflow de auto-merge mas aceita o de deploy; confere os itens acima
+- [x] Workflow só com `workflow_dispatch`; nenhum gatilho de push/PR
+- [x] Recusa ref diferente de `main`
+- [x] Usa Environment `producao` e os secrets nomeados no ticket 04
+- [x] `ssh` direto, `StrictHostKeyChecking=yes`, chave em arquivo temporário
+- [x] `curl` nos dois domínios, falha se algum não responder com sucesso
+- [x] Dependabot cobre `github-actions` com mensal, `default-days: 14` e grupo
+- [x] `docs.sh` barra workflow de auto-merge mas aceita o de deploy; confere os itens acima
 - [ ] YAML validado localmente; smoke da borda continua passando
