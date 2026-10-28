@@ -20,7 +20,7 @@ trap 'rm -rf "$TMP"' EXIT
 novo_cenario() {
   CEN="$TMP/cenario"
   rm -rf "$CEN"
-  mkdir -p "$CEN/bin" "$CEN/apps"
+  mkdir -p "$CEN/bin" "$CEN/apps" "$CEN/borda"
   : >"$CEN/chamadas.log"
   for cmd in docker git; do
     {
@@ -29,10 +29,26 @@ novo_cenario() {
       [ "$cmd" = docker ] && cat <<'RESPOSTAS'
 # Respostas do docker falso; o cenário escolhe por variáveis FALSO_*.
 case "$*" in
-  "compose ps -q"*) echo "${FALSO_CONTAINER-c0ffee}" ;;
-  *"{{.State.Health.Status}}"*) echo "${FALSO_SAUDE:-healthy}" ;;
+  "compose ps -q"*)
+    v="FALSO_CONTAINER_${4-}"
+    if [ -n "${!v+x}" ]; then echo "${!v}"; else echo "${FALSO_CONTAINER-c0ffee}"; fi ;;
+  *"{{.State.Health.Status}}"*)
+    v="FALSO_SAUDE_${!#}"
+    if [ -n "${!v+x}" ]; then echo "${!v}"; else echo "${FALSO_SAUDE:-healthy}"; fi ;;
   "inspect "*"{{.Image}}"*) echo "${FALSO_ID_EM_USO:-sha256:aaaa}" ;;
   "image inspect "*"{{.Id}}"*) echo "${FALSO_ID_DO_SHA:-sha256:aaaa}" ;;
+esac
+RESPOSTAS
+      [ "$cmd" = git ] && cat <<'RESPOSTAS'
+# Respostas do git falso: FALSO_GIT_SUJO = mudança local; o commit muda
+# depois do pull; FALSO_SAIDA_PULL != 0 = pull que não é fast-forward.
+case "$1" in
+  status) echo "${FALSO_GIT_SUJO-}" ;;
+  rev-parse)
+    if [ -e "$PWD/.pulou" ]; then echo depois222; else echo antes1111; fi ;;
+  pull)
+    [ "${FALSO_SAIDA_PULL:-0}" -eq 0 ] || exit "$FALSO_SAIDA_PULL"
+    : >"$PWD/.pulou" ;;
 esac
 RESPOSTAS
       printf 'exit "${FALSO_SAIDA_%s:-0}"\n' "${cmd^^}"
@@ -60,7 +76,7 @@ roda_cron() {
 # $SHA não definido = variável ausente. Guarda o código de saída em $SAIDA
 # e a saída em $CEN/saida.log.
 roda_deploy() {
-  local amb=(PATH="$CEN/bin:$PATH" APPS_RAIZ="$CEN/apps" TRAVA_ARQUIVO="$CEN/trava"
+  local amb=(PATH="$CEN/bin:$PATH" APPS_RAIZ="$CEN/apps" BORDA_DIR="$CEN/borda" TRAVA_ARQUIVO="$CEN/trava"
     TRAVA_ESPERA="${TRAVA_ESPERA:-2}" PRAZO_SAUDAVEL="${PRAZO_SAUDAVEL:-2}")
   [ -n "${SHA+x}" ] && amb+=(SSH_ORIGINAL_COMMAND="$SHA")
   env -u SSH_ORIGINAL_COMMAND "${amb[@]}" \
@@ -129,10 +145,6 @@ for ruim in "${SHA_OK:1}" "${SHA_OK}0" "${SHA_OK^^}" "${SHA_OK:1}g" \
   SHA=$ruim roda_deploy conan-torres
   recusado "SHA '$(printf '%q' "$ruim")' é recusado sem chamar docker" 'SHA inválido'
 done
-
-# A borda é o ticket 03: por ora, recusa clara sem tocar em nada.
-SHA=$SHA_OK roda_deploy traefik
-recusado "borda (traefik) ainda recusada sem chamar docker nem git" 'não implementado'
 
 # --- deploy do site ----------------------------------------------------------
 echo "== deploy: site =="
@@ -216,10 +228,79 @@ else
 fi
 wait "$SEGURA"
 
+# --- deploy da borda ---------------------------------------------------------
+echo "== deploy: borda =="
+# O SHA (SSH_ORIGINAL_COMMAND) não se aplica: ausente ou lixo, tanto faz.
+unset SHA
+novo_cenario
+roda_deploy traefik
+if [ "$SAIDA" -eq 0 ] \
+  && chamou 'git status.*@borda$' \
+  && chamou 'git pull --ff-only.*@borda$' \
+  && chamou 'docker compose up -d.*@borda$' \
+  && grep -q antes1111 "$CEN/saida.log" && grep -q depois222 "$CEN/saida.log" \
+  && [ "$(grep -n 'git pull' "$CEN/chamadas.log" | cut -d: -f1)" -lt \
+       "$(grep -n 'compose up' "$CEN/chamadas.log" | cut -d: -f1)" ]; then
+  ok "caminho feliz: status, pull --ff-only, up -d, commits de antes e depois no log, código 0"
+else
+  falha "caminho feliz da borda" "saída $SAIDA; $(cat "$CEN/saida.log" "$CEN/chamadas.log")"
+fi
+for svc in traefik loki alloy; do
+  chamou "docker compose ps -q $svc @borda" \
+    || falha "borda espera o serviço $svc" "$(cat "$CEN/chamadas.log")"
+done
+
+novo_cenario
+SHA='$(id); lixo' roda_deploy traefik
+if [ "$SAIDA" -eq 0 ] && ! grep -q lixo "$CEN/saida.log"; then
+  ok "SHA em SSH_ORIGINAL_COMMAND é ignorado na borda"
+else
+  falha "SHA ignorado na borda" "saída $SAIDA; $(cat "$CEN/saida.log")"
+fi
+
+novo_cenario
+FALSO_GIT_SUJO=" M docker-compose.yml" roda_deploy traefik
+recusado_pull() {
+  if [ "$SAIDA" -ne 0 ] && grep -qiE -- "$2" "$CEN/saida.log" \
+    && ! chamou 'git pull' && ! chamou 'compose up'; then
+    ok "$1"
+  else
+    falha "$1" "saída $SAIDA; $(cat "$CEN/saida.log" "$CEN/chamadas.log")"
+  fi
+}
+recusado_pull "mudança local no git da borda: recusa sem pull nem up" 'mudança local'
+
+novo_cenario
+FALSO_SAIDA_PULL=1 roda_deploy traefik
+if [ "$SAIDA" -ne 0 ] && grep -qi 'pull.*falhou' "$CEN/saida.log" \
+  && ! chamou 'compose up'; then
+  ok "pull que não é fast-forward: falha sem up"
+else
+  falha "pull não fast-forward" "saída $SAIDA; $(cat "$CEN/saida.log" "$CEN/chamadas.log")"
+fi
+
+for svc in traefik loki alloy; do
+  novo_cenario
+  eval "export FALSO_CONTAINER_$svc=c$svc FALSO_SAUDE_c$svc=starting"
+  PRAZO_SAUDAVEL=1 roda_deploy traefik
+  unset "FALSO_CONTAINER_$svc" "FALSO_SAUDE_c$svc"
+  falhou "$svc que não fica healthy no prazo falha com mensagem" "não ficou healthy.*$svc"
+done
+novo_cenario
+FALSO_CONTAINER_loki= PRAZO_SAUDAVEL=1 roda_deploy traefik
+falhou "loki sem container depois do up falha com mensagem" 'não ficou healthy.*loki'
+
+novo_cenario
+segura_trava 3
+TRAVA_ESPERA=1 roda_deploy traefik
+recusado "borda: trava ocupada além da espera falha sem chamar docker nem git" 'trava'
+wait "$SEGURA"
+
 # Sem as variáveis de ambiente, o deploy usa os caminhos e prazos de produção,
 # e a mesma trava do cron.
 if grep -qF '${APPS_RAIZ:-/opt/apps}' vps/deploy-vps.sh \
   && grep -qF '${TRAVA_ARQUIVO:-/run/atualizar-apps.lock}' vps/deploy-vps.sh \
+  && grep -qF '${BORDA_DIR:-/opt/traefik}' vps/deploy-vps.sh \
   && grep -qF '${PRAZO_SAUDAVEL:-120}' vps/deploy-vps.sh; then
   ok "deploy: padrões de produção (/opt/apps, trava do cron, 120s até healthy)"
 else
