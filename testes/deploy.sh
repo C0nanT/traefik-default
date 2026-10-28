@@ -17,7 +17,7 @@ trap 'rm -rf "$TMP"' EXIT
 # --- ambiente de cada cenário ------------------------------------------------
 # novo_cenario: zera $TMP/cenario com bin/ (docker falso), apps/ e chamadas.log.
 # O falso grava "docker <args> @<pasta atual>" no log; FALSO_SAIDA_DOCKER != 0
-# faz o docker falhar.
+# faz o docker falhar; FALSO_FALHA_EM=<pasta> faz falhar só naquela pasta.
 novo_cenario() {
   CEN="$TMP/cenario"
   rm -rf "$CEN"
@@ -26,6 +26,7 @@ novo_cenario() {
   {
     printf '#!/usr/bin/env bash\n'
     printf 'echo "docker $* @$(basename "$PWD")" >>%q\n' "$CEN/chamadas.log"
+    printf '[ "${FALSO_FALHA_EM:-}" = "$(basename "$PWD")" ] && exit 1\n'
     printf 'exit "${FALSO_SAIDA_DOCKER:-0}"\n'
   } >"$CEN/bin/docker"
   chmod +x "$CEN/bin/docker"
@@ -39,7 +40,9 @@ site() {
 
 # roda_cron: executa o script do cron com o ambiente de teste.
 roda_cron() {
+  mkdir -p "$CEN/metricas"
   PATH="$CEN/bin:$PATH" APPS_RAIZ="$CEN/apps" TRAVA_ARQUIVO="$CEN/trava" \
+    METRICAS_DIR="${METRICAS_DIR:-$CEN/metricas}" \
     bash vps/atualizar-apps.sh >"$CEN/saida.log" 2>&1
 }
 
@@ -81,6 +84,66 @@ if grep -qF '${APPS_RAIZ:-/opt/apps}' vps/atualizar-apps.sh \
   ok "padrões de produção mantidos (/opt/apps e /run/atualizar-apps.lock)"
 else
   falha "padrões de produção mantidos" "vps/atualizar-apps.sh"
+fi
+
+# --- métrica -----------------------------------------------------------------
+echo "== métrica (textfile do node exporter) =="
+PROM_CRON="metricas/deploy.prom"
+
+novo_cenario
+site bbcontainer
+site conan-torres
+roda_cron
+PROM="$CEN/$PROM_CRON"
+if grep -qx 'deploy_falhou{app="bbcontainer"} 0' "$PROM" \
+  && grep -qx 'deploy_falhou{app="conan-torres"} 0' "$PROM"; then
+  ok "todos ok: deploy_falhou 0 para cada site"
+else
+  falha "todos ok: deploy_falhou 0 para cada site" "$(cat "$PROM" 2>&1)"
+fi
+if grep -qE '^deploy_rodada_timestamp_seconds [0-9]{10}$' "$PROM"; then
+  ok "grava o horário Unix do fim da rodada"
+else
+  falha "grava o horário Unix do fim da rodada" "$(cat "$PROM" 2>&1)"
+fi
+if [ "$(ls "$CEN/metricas")" = "deploy.prom" ]; then
+  ok "gravação atômica: nenhum temporário sobrando"
+else
+  falha "gravação atômica: nenhum temporário sobrando" "$(ls -A "$CEN/metricas")"
+fi
+
+novo_cenario
+site bbcontainer
+site conan-torres
+FALSO_FALHA_EM=conan-torres roda_cron
+PROM="$CEN/$PROM_CRON"
+if grep -qx 'deploy_falhou{app="conan-torres"} 1' "$PROM" \
+  && grep -qx 'deploy_falhou{app="bbcontainer"} 0' "$PROM" \
+  && grep -q 'ERRO conan-torres' "$CEN/saida.log"; then
+  ok "um site falhando: 1 só para ele e linha ERRO no log"
+else
+  falha "um site falhando: 1 só para ele e linha ERRO no log" "$(cat "$PROM" "$CEN/saida.log" 2>&1)"
+fi
+
+# A métrica nunca atrapalha o deploy: diretório impossível de gravar.
+novo_cenario
+site conan-torres
+METRICAS_DIR="$CEN/nao-existe/nem-aqui" roda_cron
+codigo=$?
+if [ "$codigo" -eq 0 ] \
+  && chamou 'compose up -d.*@conan-torres$' \
+  && grep -q 'ERRO métrica' "$CEN/saida.log"; then
+  ok "falha ao gravar a métrica vira linha no log e não muda o deploy"
+else
+  falha "falha ao gravar a métrica não muda o deploy" "código $codigo: $(cat "$CEN/saida.log")"
+fi
+
+# Sem METRICAS_DIR, o diretório vem do volume real da borda, pelo Docker.
+if grep -qF 'docker volume inspect' vps/atualizar-apps.sh \
+  && grep -qF '${METRICAS_VOLUME:-traefik_textfile}' vps/atualizar-apps.sh; then
+  ok "padrão de produção: mountpoint do volume traefik_textfile"
+else
+  falha "padrão de produção: mountpoint do volume traefik_textfile" "vps/atualizar-apps.sh"
 fi
 
 if [ "$FALHAS" -gt 0 ]; then
