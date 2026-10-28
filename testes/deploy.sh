@@ -100,6 +100,43 @@ LOG_ARQUIVO="$CEN/log-novo/atualizar-apps.log" FALSO_SAIDA_DOCKER=1 roda_cron
 verifica "cria a pasta do log se faltar e escreve nela" "$(ls -R "$CEN" 2>&1)" \
   grep -q 'ERRO conan-torres' "$CEN/log-novo/atualizar-apps.log"
 
+# Trava: com ela ocupada por outro processo, a rodada sai com 0 sem fazer nada.
+# Duas rodadas sob a trava, cada uma prova uma coisa: com docker falhando, uma
+# rodada que passasse da trava deixaria linha ERRO no log (prova o log sem
+# linha nova); com docker saudável e a métrica da rodada anterior intacta, prova
+# código 0, nenhuma chamada ao docker e métrica inalterada. Só a segunda rodada
+# define $codigo.
+novo_cenario
+site conan-torres
+FALSO_SAIDA_DOCKER=1 roda_cron
+: >"$CEN/chamadas.log"
+cp "$CEN/saida.log" "$CEN/log-antes"
+cp "$CEN/metricas/deploy.prom" "$CEN/prom-antes"
+rm -f "$CEN/pronto"
+# O subshell pega a trava no fd 9 e vira o próprio sleep (exec): matar
+# PID_TRAVA mata quem a segura, sem processo órfão.
+( flock 9; : >"$CEN/pronto"; exec sleep 5 ) 9>"$CEN/trava" &
+PID_TRAVA=$!
+for _ in $(seq 50); do [ -e "$CEN/pronto" ] && break; sleep 0.1; done
+if [ ! -e "$CEN/pronto" ]; then
+  kill "$PID_TRAVA" 2>/dev/null
+  falha "trava ocupada: o holder não obteve a trava em 5s (arquivo pronto não apareceu)"
+  exit 1
+fi
+FALSO_SAIDA_DOCKER=1 roda_cron
+roda_cron
+codigo=$?
+kill "$PID_TRAVA" 2>/dev/null
+wait "$PID_TRAVA" 2>/dev/null
+verifica "trava ocupada: o script sai com código 0" "código $codigo" \
+  test "$codigo" -eq 0
+verifica "trava ocupada: docker não é chamado" "$(cat "$CEN/chamadas.log")" \
+  test ! -s "$CEN/chamadas.log"
+verifica "trava ocupada: o log não ganha linha" "$(cat "$CEN/saida.log")" \
+  cmp -s "$CEN/log-antes" "$CEN/saida.log"
+verifica "trava ocupada: a métrica da rodada anterior fica idêntica" "$(cat "$CEN/metricas/deploy.prom")" \
+  cmp -s "$CEN/prom-antes" "$CEN/metricas/deploy.prom"
+
 # --- métrica -----------------------------------------------------------------
 echo "== métrica (textfile do node exporter) =="
 PROM_CRON="metricas/deploy.prom"

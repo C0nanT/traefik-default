@@ -83,11 +83,11 @@ tem .scratch/traefik-vps-base/SPEC.md 'primeiro armazenamento de monitoramento n
 H=.scratch/traefik-vps-base/HANDOFF.md
 nao_tem README.md 'Basta subir um Prometheus na rede' "próximos passos sem o plano antigo do Prometheus na rede proxy"
 tem README.md '../homelab-monitoring#colocar-no-ar' "próximos passos aponta para colocar no ar do homelab-monitoring"
-tem $H 'node exporter' "HANDOFF registra o node exporter"
-tem $H 'metricas' "HANDOFF registra o usuário metricas"
-tem $H 'concluído em 2026-10-27, com alertas no Telegram' "HANDOFF: item 2 concluído, com Telegram"
-tem $H '127.0.0.1:9100' "HANDOFF cita a porta 9100 no loopback"
-tem $H 'Loki' "HANDOFF registra o Loki na borda"
+tem "$H" 'node exporter' "HANDOFF registra o node exporter"
+tem "$H" 'metricas' "HANDOFF registra o usuário metricas"
+tem "$H" 'concluído em 2026-10-27, com alertas no Telegram' "HANDOFF: item 2 concluído, com Telegram"
+tem "$H" '127.0.0.1:9100' "HANDOFF cita a porta 9100 no loopback"
+tem "$H" 'Loki' "HANDOFF registra o Loki na borda"
 # Nuvem laranja: Traefik confia no X-Forwarded-For só vindo da Cloudflare.
 tem traefik/traefik.yml 'trustedIPs' "traefik.yml: forwardedHeaders.trustedIPs nas entradas públicas"
 tem traefik/traefik.yml '173.245.48.0/20' "traefik.yml: faixas IPv4 da Cloudflare"
@@ -184,4 +184,43 @@ tem "$falha_forcada" 'Cron de deploy parado' "checklist da falha: alerta de cron
 tem "$falha_forcada" 'sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron /etc/cron.d/atualizar-apps' "checklist da falha: religa o cron"
 tem "$falha_forcada" 'resolvido' "checklist da falha: confere o alerta resolvido"
 tem README.md '[Checklist da falha forçada](#checklist-manual-da-falha-forçada)' "README: índice aponta o checklist da falha forçada"
+# Acesso à VPS pelo apelido `ssh vps` (README).
+# Fora desta conferência ficam os exemplos do túnel de métricas
+# (metricas@IP_DA_VPS, chave id_tunel): rodam no homelab, com outro usuário e outra chave.
+acesso="$tmp/README-acesso-vps"
+secao_readme "Acesso à VPS (ssh vps)" > "$acesso"
+tem README.md '`ssh vps`' "README: ponteiro para o apelido ssh vps"
+tem README.md '(#acesso-à-vps-ssh-vps)' "README: ponteiro aponta o bloco Host vps"
+topo="$tmp/README-topo"
+head -n 12 README.md > "$topo"
+tem "$topo" 'ssh vps' "README: ponteiro ssh vps perto do topo (primeiras 12 linhas)"
+tem "$acesso" 'Host vps' "acesso: bloco Host vps"
+tem_re "$acesso" '^ +HostName IP_DA_VPS$' "acesso: HostName com o placeholder IP_DA_VPS"
+tem_re "$acesso" '^ +User root$' "acesso: User root"
+tem_re "$acesso" '^ +IdentityFile ~/\.ssh/id_ed25519$' "acesso: IdentityFile da chave"
+tem_re "$acesso" '^ +IdentitiesOnly yes$' "acesso: IdentitiesOnly"
+tem_re "$acesso" '^ +PasswordAuthentication no$' "acesso: só chave, sem senha"
+tem_re "$acesso" '^ +StrictHostKeyChecking accept-new$' "acesso: confere a chave do servidor"
+tem "$acesso" 'só comandos de leitura' "acesso: regra de só leitura para o agente"
+tem "$acesso" 'rodada pelo dono' "acesso: mudanças na VPS são rodadas pelo dono"
+# Nenhum exemplo de comando usa o IP direto: falha com qualquer @IP_DA_VPS ou ssh ... IP_DA_VPS,
+# exceto o túnel de métricas (metricas@IP_DA_VPS) e a linha `HostName IP_DA_VPS` do bloco.
+ip_direto=$(grep -nE '@IP_DA_VPS|ssh .*IP_DA_VPS' README.md | grep -vF 'metricas@IP_DA_VPS' | grep -vE 'HostName IP_DA_VPS' || true)
+if [ -z "$ip_direto" ]; then
+  echo "ok    README: nenhum exemplo de acesso usa o IP direto"
+else
+  echo "FALHA README: exemplo com IP direto (fora o túnel metricas@IP_DA_VPS): $ip_direto"
+  falhas=$((falhas + 1))
+fi
+tem README.md 'ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 -L 9100:127.0.0.1:9100 -L 3100:127.0.0.1:3100 vps' "README: túnel do painel usa ssh vps"
+tem README.md 'metricas@IP_DA_VPS' "README: túnel de métricas mantém metricas@IP_DA_VPS"
+# Hook de pre-commit: versionado, executável, roda os dois testes rápidos e o README ensina a ativar.
+HOOK=.githooks/pre-commit
+if [ -x "$HOOK" ]; then echo "ok    hook de pre-commit existe e é executável"; else echo "FALHA hook de pre-commit ausente ou sem permissão de execução ($HOOK)"; falhas=$((falhas + 1)); fi
+tem_re "$HOOK" '^[^#]*testes/docs\.sh' "hook roda o docs.sh (fora de comentário)"
+tem_re "$HOOK" '^[^#]*testes/deploy\.sh' "hook roda o deploy.sh (fora de comentário)"
+nao_tem "$HOOK" 'smoke.sh' "hook não roda o smoke (sobe a borda inteira)"
+tem_re "$HOOK" 'checkout-index' "hook testa o índice (o que será commitado), não a árvore de trabalho"
+tem README.md 'git config core.hooksPath .githooks' "README: comando que ativa o hook"
+tem README.md '--no-verify' "README: como pular o hook"
 exit $((falhas > 0))
