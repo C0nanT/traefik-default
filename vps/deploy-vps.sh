@@ -31,8 +31,33 @@ valida_sha() {
     || erro "SHA inválido: esperado o commit completo (40 caracteres hexadecimais)"
 }
 
-# numero NOME VALOR: aceita só inteiro (vai para aritmética e para o flock).
-numero() { [[ "$2" =~ ^[0-9]+$ ]] || erro "$1 inválido: '$2'"; }
+# numero NOME VALOR: aceita só inteiro decimal sem zero à esquerda (vai para
+# aritmética e para o flock; "08" seria lido como octal inválido).
+numero() { [[ "$2" =~ ^(0|[1-9][0-9]*)$ ]] || erro "$1 inválido: '$2'"; }
+
+# estado_saude CONTAINER: imprime o estado do healthcheck do container
+# (healthy, starting, unhealthy ou sem-healthcheck).
+estado_saude() {
+  docker inspect --format \
+    '{{if .State.Health}}{{.State.Health.Status}}{{else}}sem-healthcheck{{end}}' \
+    "$1"
+}
+
+# espera_saudavel CONFERE MENSAGEM: chama a função CONFERE a cada 2s até o
+# prazo (PRAZO_SAUDAVEL, padrão 120s). CONFERE põe em `pendente` o que falta
+# (vazio = tudo healthy). Estourado o prazo: erro "MENSAGEM em Ns<pendente>".
+espera_saudavel() {
+  local prazo="${PRAZO_SAUDAVEL:-120}" pendente
+  numero PRAZO_SAUDAVEL "$prazo"
+  local fim=$((SECONDS + prazo))
+  while :; do
+    pendente=""
+    "$1"
+    [ -z "$pendente" ] && return 0
+    [ "$SECONDS" -ge "$fim" ] && erro "$2 em ${prazo}s$pendente"
+    sleep 2
+  done
+}
 
 # Mesma trava do cron (vps/atualizar-apps.sh), para não rodar junto com ele
 # nem com outro deploy. Diferente do cron, espera a vez por tempo limitado.
@@ -69,18 +94,12 @@ deploy_site() {
   [[ "$container" != *$'\n'* ]] || erro "mais de um container do serviço $SERVICO"
 
   # Espera o healthcheck da imagem dar `healthy`, até o prazo.
-  local prazo="${PRAZO_SAUDAVEL:-120}" saude=""
-  numero PRAZO_SAUDAVEL "$prazo"
-  local fim=$((SECONDS + prazo))
-  while :; do
-    saude="$(docker inspect --format \
-      '{{if .State.Health}}{{.State.Health.Status}}{{else}}sem-healthcheck{{end}}' \
-      "$container")" || erro "docker inspect do container falhou"
-    [ "$saude" = healthy ] && break
-    [ "$SECONDS" -ge "$fim" ] \
-      && erro "container de $projeto não ficou healthy em ${prazo}s (estado: $saude)"
-    sleep 2
-  done
+  confere_site() {
+    local saude
+    saude="$(estado_saude "$container")" || erro "docker inspect do container falhou"
+    [ "$saude" = healthy ] || pendente=" (estado: $saude)"
+  }
+  espera_saudavel confere_site "container de $projeto não ficou healthy"
 
   # A imagem em uso tem de ser a do commit que o CI construiu.
   # Compara o ID da imagem (digest da config) do container com o da tag do
@@ -116,26 +135,19 @@ deploy_borda() {
   docker compose up -d --remove-orphans || erro "docker compose up -d falhou"
 
   # Espera os três healthy, até o prazo (um prazo só para todos).
-  local prazo="${PRAZO_SAUDAVEL:-120}" svc container saude pendente=""
-  numero PRAZO_SAUDAVEL "$prazo"
-  local fim=$((SECONDS + prazo))
-  while :; do
-    pendente=""
+  confere_borda() {
+    local svc container saude falta=""
     for svc in traefik loki alloy; do
       container="$(docker compose ps -q "$svc")" || erro "docker compose ps falhou"
       saude=sem-container
       if [ -n "$container" ] && [[ "$container" != *$'\n'* ]]; then
-        saude="$(docker inspect --format \
-          '{{if .State.Health}}{{.State.Health.Status}}{{else}}sem-healthcheck{{end}}' \
-          "$container")" || saude=erro-inspect
+        saude="$(estado_saude "$container")" || saude=erro-inspect
       fi
-      [ "$saude" = healthy ] || pendente="$pendente $svc($saude)"
+      [ "$saude" = healthy ] || falta="$falta $svc($saude)"
     done
-    [ -z "$pendente" ] && break
-    [ "$SECONDS" -ge "$fim" ] \
-      && erro "não ficou healthy em ${prazo}s:$pendente"
-    sleep 2
-  done
+    [ -z "$falta" ] || pendente=":$falta"
+  }
+  espera_saudavel confere_borda "não ficou healthy"
   echo "deploy de $projeto ok: $antes -> $depois"
 }
 

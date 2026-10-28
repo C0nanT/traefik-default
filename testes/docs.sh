@@ -125,18 +125,19 @@ tem $DA 'default-days: 14' "Dependabot: actions com cooldown de 14 dias"
 tem_re $DA '^    groups:$' "Dependabot: actions num grupo só (um PR por mês)"
 tem_re $DA '^          - "\*"$' "Dependabot: grupo das actions pega todas"
 # Nenhum workflow de auto-merge: nada que mescle ou aprove PR sozinho.
+# Qualquer workflow é permitido, desde que não faça isso.
 for f in .github/workflows/*; do
   [ -e "$f" ] || continue
-  for p in 'gh pr merge' 'gh pr review' '--auto' 'pull_request_target' 'dependabot/fetch-metadata' 'auto-merge' 'automerge'; do
+  for p in 'gh pr merge' 'gh pr review' '--approve' '--auto' 'pull_request_target' \
+    'dependabot/fetch-metadata' 'auto-merge' 'automerge' 'enablePullRequestAutoMerge' \
+    'merge_method' '/merge' 'pulls.createReview' 'pulls.merge'; do
     nao_tem "$f" "$p" "sem auto-merge: $f não tem '$p'"
   done
 done
 # Workflow de deploy da borda: só pelo botão, só da main, no Environment
 # producao, ssh do runner com o host conferido e curl nos dois domínios.
 W=.github/workflows/deploy-borda.yml
-if [ -f $W ]; then echo "ok    workflow de deploy da borda existe ($W)"; else echo "FALHA workflow de deploy da borda não existe ($W)"; falhas=$((falhas + 1)); fi
-n=$(ls .github/workflows 2>/dev/null | wc -l)
-if [ "$n" = 1 ]; then echo "ok    só o workflow de deploy em .github/workflows"; else echo "FALHA .github/workflows deveria ter só o deploy-borda.yml, há $n arquivo(s)"; falhas=$((falhas + 1)); fi
+tem_re $W '^name: Deploy da borda$' "workflow de deploy da borda existe ($W)"
 tem_re $W '^  workflow_dispatch:' "workflow: disparo manual (workflow_dispatch)"
 n=$(awk '/^on:/{on=1; next} /^[^ #]/{on=0} on && /^  [a-z_]+:/' $W 2>/dev/null | wc -l)
 if [ "$n" = 1 ]; then echo "ok    workflow: único gatilho é o manual"; else echo "FALHA workflow: esperado só o gatilho workflow_dispatch, há $n"; falhas=$((falhas + 1)); fi
@@ -155,10 +156,12 @@ tem $W 'UserKnownHostsFile=' "workflow: known_hosts do secret, em arquivo"
 tem $W 'IdentitiesOnly=yes' "workflow: usa só a chave do secret"
 tem $W 'mktemp' "workflow: chave e known_hosts em arquivos temporários"
 nao_tem $W 'actions/checkout' "workflow: sem checkout"
-if grep -qiE '^\s*-?\s*uses:.*ssh' $W 2>/dev/null; then echo "FALHA workflow: action de terceiros para SSH"; falhas=$((falhas + 1)); else echo "ok    workflow: sem action de terceiros para SSH"; fi
+nao_tem $W 'uses:' "workflow: sem action nenhuma (nem de terceiros para SSH)"
 tem $W 'https://conantorres.dev/' "workflow: curl no conantorres.dev"
 tem $W 'https://bbcontainermodular.com/' "workflow: curl no bbcontainer"
-tem $W '"200"' "workflow: curl exige 200"
+tem $W '2[0-9][0-9])' "workflow: curl exige resposta 2xx"
+nao_tem $W ' -L' "workflow: curl não segue redirecionamento (-L)"
+nao_tem $W '--location' "workflow: curl não segue redirecionamento (--location)"
 tem README.md 'Insights → Dependency graph → Dependabot' "README: onde conferir a leitura do Dependabot"
 tem README.md 'Atualização das imagens (Dependabot)' "README: item do Dependabot no checklist manual"
 tem_re README.md 'Dependency graph → Dependabot que o GitHub leu' "README: checklist manual manda conferir o Dependency graph depois do merge"

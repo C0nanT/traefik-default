@@ -290,6 +290,17 @@ novo_cenario
 FALSO_CONTAINER_loki= PRAZO_SAUDAVEL=1 roda_deploy traefik
 falhou "loki sem container depois do up falha com mensagem" 'não ficou healthy.*loki'
 
+# Prazos com zero à esquerda ("08" quebraria a aritmética como octal) ou
+# não numéricos são recusados com mensagem.
+for ruim in 08 010 abc; do
+  novo_cenario
+  TRAVA_ESPERA=$ruim roda_deploy traefik
+  recusado "TRAVA_ESPERA='$ruim' é recusado sem chamar docker nem git" 'TRAVA_ESPERA inválido'
+  novo_cenario
+  PRAZO_SAUDAVEL=$ruim roda_deploy traefik
+  falhou "PRAZO_SAUDAVEL='$ruim' falha com mensagem" 'PRAZO_SAUDAVEL inválido'
+done
+
 novo_cenario
 segura_trava 3
 TRAVA_ESPERA=1 roda_deploy traefik
