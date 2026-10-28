@@ -11,7 +11,7 @@
 
 **Blocked by:** 04
 
-Status: ready-for-agent
+Status: ready-for-human
 
-- [ ] Checklist no README da borda com todos os passos, e referência no homelab
-- [ ] `docs.sh` confere o checklist
+- [x] Checklist no README da borda com todos os passos, e referência no homelab
+- [x] `docs.sh` confere o checklist

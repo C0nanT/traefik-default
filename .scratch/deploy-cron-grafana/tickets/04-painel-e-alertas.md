@@ -11,10 +11,10 @@
 
 **Blocked by:** 02, 03
 
-Status: ready-for-agent
+Status: ready-for-human
 
-- [ ] Linha "Deploy (cron)" com os três painéis no painel Logs
-- [ ] Alerta "Deploy falhou (VPS)" sem espera, com o `app` na mensagem
-- [ ] Alerta "Cron de deploy parado" (30 min ou série ausente)
-- [ ] Limites no lugar de sempre; mensagem no modelo existente
-- [ ] Smoke do homelab e `docs.sh` passam
+- [x] Linha "Deploy (cron)" com os três painéis no painel Logs
+- [x] Alerta "Deploy falhou (VPS)" sem espera, com o `app` na mensagem
+- [x] Alerta "Cron de deploy parado" (30 min ou série ausente)
+- [x] Limites no lugar de sempre; mensagem no modelo existente
+- [x] Smoke do homelab e `docs.sh` passam

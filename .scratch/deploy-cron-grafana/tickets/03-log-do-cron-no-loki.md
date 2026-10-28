@@ -11,9 +11,9 @@
 
 **Blocked by:** 01
 
-Status: ready-for-agent
+Status: ready-for-human
 
-- [ ] Alloy lê o log do cron, só leitura, com rótulo próprio
-- [ ] Leitura sobrevive à rotação do log
-- [ ] Smoke da borda confere a linha no Loki com o rótulo
-- [ ] README cita o rótulo e uma consulta LogQL
+- [x] Alloy lê o log do cron, só leitura, com rótulo próprio
+- [x] Leitura sobrevive à rotação do log
+- [x] Smoke da borda confere a linha no Loki com o rótulo
+- [x] README cita o rótulo e uma consulta LogQL

@@ -12,11 +12,11 @@
 
 **Blocked by:** 01
 
-Status: ready-for-agent
+Status: ready-for-human
 
-- [ ] Todos ok → 0 por site + horário; um falhando → 1 só para ele e linha `ERRO` no log
-- [ ] Gravação atômica: sem temporário sobrando, arquivo final válido
-- [ ] Falha ao gravar a métrica não altera o deploy
-- [ ] Sem variáveis de teste, caminhos de produção
-- [ ] Smoke da borda confere `deploy_falhou` no node exporter
-- [ ] README explica a métrica e a reinstalação do script
+- [x] Todos ok → 0 por site + horário; um falhando → 1 só para ele e linha `ERRO` no log
+- [x] Gravação atômica: sem temporário sobrando, arquivo final válido
+- [x] Falha ao gravar a métrica não altera o deploy
+- [x] Sem variáveis de teste, caminhos de produção
+- [x] Smoke da borda confere `deploy_falhou` no node exporter
+- [x] README explica a métrica e a reinstalação do script

@@ -11,11 +11,11 @@
 
 **Blocked by:** None (can start immediately)
 
-Status: ready-for-agent
+Status: ready-for-human
 
-- [ ] Workflow da borda, `deploy-vps` e marcador removidos; `.github/workflows` vazio
-- [ ] Dependabot sem `github-actions`
-- [ ] README e guia sem deploy pelo CI; guia descreve cron e manual
-- [ ] Roteiro de limpeza da VPS e do GitHub no README
-- [ ] Teste local só do cron passa; `docs.sh` passa e barra restos do SSH
-- [ ] HANDOFF e spec antiga atualizados
+- [x] Workflow da borda, `deploy-vps` e marcador removidos; `.github/workflows` vazio
+- [x] Dependabot sem `github-actions`
+- [x] README e guia sem deploy pelo CI; guia descreve cron e manual
+- [x] Roteiro de limpeza da VPS e do GitHub no README
+- [x] Teste local só do cron passa; `docs.sh` passa e barra restos do SSH
+- [x] HANDOFF e spec antiga atualizados
