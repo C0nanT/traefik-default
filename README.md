@@ -59,7 +59,9 @@ Faça uma vez por servidor (Debian/Ubuntu; ajuste ao seu sistema).
    `vps/atualizar-apps.sh` roda `docker compose pull && up -d` em cada
    `/opt/apps/*/` (só recria o que mudou) e limpa imagens antigas. Push na
    `main` de um site → no ar em até ~10 min depois do CI. Log só de mudanças
-   e erros em `/var/log/atualizar-apps.log`, com rotação semanal:
+   e erros em `/var/log/atualizar-apps.log`, com rotação semanal. Pasta que
+   tiver o arquivo-marcador `.deploy-pelo-ci` é pulada pelo cron (quem
+   atualiza é o deploy pelo CI):
    ```bash
    sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh /usr/local/bin/atualizar-apps.sh
    sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron /etc/cron.d/atualizar-apps
