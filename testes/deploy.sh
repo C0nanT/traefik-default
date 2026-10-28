@@ -101,8 +101,11 @@ verifica "cria a pasta do log se faltar e escreve nela" "$(ls -R "$CEN" 2>&1)" \
   grep -q 'ERRO conan-torres' "$CEN/log-novo/atualizar-apps.log"
 
 # Trava: com ela ocupada por outro processo, a rodada sai com 0 sem fazer nada.
-# Primeira rodada (docker falhando) deixa linha no log e deploy_falhou 1; a
-# segunda, com a trava presa e docker saudável, não pode mudar nada disso.
+# Duas rodadas sob a trava, cada uma prova uma coisa: com docker falhando, uma
+# rodada que passasse da trava deixaria linha ERRO no log (prova o log sem
+# linha nova); com docker saudável e a métrica da rodada anterior intacta, prova
+# código 0, nenhuma chamada ao docker e métrica inalterada. Só a segunda rodada
+# define $codigo.
 novo_cenario
 site conan-torres
 FALSO_SAIDA_DOCKER=1 roda_cron
@@ -110,15 +113,21 @@ FALSO_SAIDA_DOCKER=1 roda_cron
 cp "$CEN/saida.log" "$CEN/log-antes"
 cp "$CEN/metricas/deploy.prom" "$CEN/prom-antes"
 rm -f "$CEN/pronto"
-flock "$CEN/trava" bash -c ': >"$1"; sleep 5' _ "$CEN/pronto" &
-SEGURA=$!
-until [ -e "$CEN/pronto" ]; do sleep 0.1; done
-# Com docker falhando, uma rodada que passasse da trava deixaria linha ERRO no log.
+# O subshell pega a trava no fd 9 e vira o próprio sleep (exec): matar
+# PID_TRAVA mata quem a segura, sem processo órfão.
+( flock 9; : >"$CEN/pronto"; exec sleep 5 ) 9>"$CEN/trava" &
+PID_TRAVA=$!
+for _ in $(seq 50); do [ -e "$CEN/pronto" ] && break; sleep 0.1; done
+if [ ! -e "$CEN/pronto" ]; then
+  kill "$PID_TRAVA" 2>/dev/null
+  falha "trava ocupada: o holder não obteve a trava em 5s (arquivo pronto não apareceu)"
+  exit 1
+fi
 FALSO_SAIDA_DOCKER=1 roda_cron
 roda_cron
 codigo=$?
-kill "$SEGURA" 2>/dev/null
-wait "$SEGURA" 2>/dev/null
+kill "$PID_TRAVA" 2>/dev/null
+wait "$PID_TRAVA" 2>/dev/null
 verifica "trava ocupada: o script sai com código 0" "código $codigo" \
   test "$codigo" -eq 0
 verifica "trava ocupada: docker não é chamado" "$(cat "$CEN/chamadas.log")" \
