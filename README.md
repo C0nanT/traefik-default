@@ -579,6 +579,12 @@ Marque cada item ao validar:
 - [ ] Site em `le-http`: SAN = só os nomes exatos (`dominio`, e o `www`
       com o certificado dele); nenhum curinga.
 
+**Atualização das imagens (Dependabot)**
+- [ ] Depois do merge da configuração, conferir em
+      Insights → Dependency graph → Dependabot que o GitHub leu o
+      `.github/dependabot.yml` sem erro e lista os dois diretórios (`/` e
+      `/exemplos/whoami`).
+
 ### Estudo extra: delegação do DNS-01 por CNAME
 
 O `bbcontainermodular.com` tem DNS na Squarespace, sem API, por isso usa

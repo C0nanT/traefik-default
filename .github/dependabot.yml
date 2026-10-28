@@ -5,10 +5,13 @@
 # Insights → Dependency graph → Dependabot depois de cada mudança.
 version: 2
 updates:
-  # docker-compose.yml da raiz: Traefik, socket-proxy, node exporter,
-  # BusyBox, Loki e Alloy.
+  # docker-compose.yml da raiz (Traefik, socket-proxy, node exporter,
+  # BusyBox, Loki e Alloy) e o do exemplo whoami (o smoke test lê a imagem
+  # daqui). Uma entrada só com as duas pastas: um PR por mês, não dois.
   - package-ecosystem: docker-compose
-    directory: /
+    directories:
+      - "/"
+      - "/exemplos/whoami"
     schedule:
       interval: monthly
     # Acima de 0 de propósito (nos sites é 0): aqui queremos os PRs.
@@ -19,7 +22,7 @@ updates:
       default-days: 14
     # Um PR só com tudo que mudou.
     groups:
-      imagens-borda:
+      imagens:
         patterns:
           - "*"
     ignore:
@@ -32,16 +35,3 @@ updates:
       - dependency-name: busybox
         update-types:
           - "version-update:semver-minor"
-
-  # Exemplo whoami (o smoke test lê a imagem daqui).
-  - package-ecosystem: docker-compose
-    directory: /exemplos/whoami
-    schedule:
-      interval: monthly
-    open-pull-requests-limit: 5
-    cooldown:
-      default-days: 14
-    groups:
-      imagens-exemplo:
-        patterns:
-          - "*"
