@@ -1,9 +1,7 @@
-# Atualização das imagens Docker da borda e das actions do workflow de
-# deploy: um PR por mês para cada, só para revisão. Nada é mesclado sozinho
-# (não há workflow de auto-merge nem regra para isso; o único workflow
-# é o deploy pelo botão): o dono lê as notas, roda testes/smoke.sh e
-# aprova; depois aplica na VPS pelo botão "Run workflow" (ou git pull +
-# up -d à mão).
+# Atualização das imagens Docker da borda: um PR por mês, só para revisão.
+# Nada é mesclado sozinho (não há workflow de auto-merge nem regra para
+# isso): o dono lê as notas, roda testes/smoke.sh e aprova; depois aplica
+# na VPS com git pull + up -d à mão.
 # Este arquivo só é validado pelo GitHub: confira em
 # Insights → Dependency graph → Dependabot depois de cada mudança.
 version: 2
@@ -38,19 +36,3 @@ updates:
       - dependency-name: busybox
         update-types:
           - "version-update:semver-minor"
-
-  # Actions usadas em .github/workflows (hoje o deploy-borda.yml não usa
-  # nenhuma: só ssh e curl do runner; isto cobre as que vierem). Mesma regra
-  # das imagens: mensal, 14 dias de espera (para github-actions também só
-  # existe default-days) e um PR só.
-  - package-ecosystem: github-actions
-    directory: "/"
-    schedule:
-      interval: monthly
-    open-pull-requests-limit: 5
-    cooldown:
-      default-days: 14
-    groups:
-      actions:
-        patterns:
-          - "*"
