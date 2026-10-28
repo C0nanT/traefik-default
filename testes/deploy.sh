@@ -100,6 +100,34 @@ LOG_ARQUIVO="$CEN/log-novo/atualizar-apps.log" FALSO_SAIDA_DOCKER=1 roda_cron
 verifica "cria a pasta do log se faltar e escreve nela" "$(ls -R "$CEN" 2>&1)" \
   grep -q 'ERRO conan-torres' "$CEN/log-novo/atualizar-apps.log"
 
+# Trava: com ela ocupada por outro processo, a rodada sai com 0 sem fazer nada.
+# Primeira rodada (docker falhando) deixa linha no log e deploy_falhou 1; a
+# segunda, com a trava presa e docker saudável, não pode mudar nada disso.
+novo_cenario
+site conan-torres
+FALSO_SAIDA_DOCKER=1 roda_cron
+: >"$CEN/chamadas.log"
+cp "$CEN/saida.log" "$CEN/log-antes"
+cp "$CEN/metricas/deploy.prom" "$CEN/prom-antes"
+rm -f "$CEN/pronto"
+flock "$CEN/trava" bash -c ': >"$1"; sleep 5' _ "$CEN/pronto" &
+SEGURA=$!
+until [ -e "$CEN/pronto" ]; do sleep 0.1; done
+# Com docker falhando, uma rodada que passasse da trava deixaria linha ERRO no log.
+FALSO_SAIDA_DOCKER=1 roda_cron
+roda_cron
+codigo=$?
+kill "$SEGURA" 2>/dev/null
+wait "$SEGURA" 2>/dev/null
+verifica "trava ocupada: o script sai com código 0" "código $codigo" \
+  test "$codigo" -eq 0
+verifica "trava ocupada: docker não é chamado" "$(cat "$CEN/chamadas.log")" \
+  test ! -s "$CEN/chamadas.log"
+verifica "trava ocupada: o log não ganha linha" "$(cat "$CEN/saida.log")" \
+  cmp -s "$CEN/log-antes" "$CEN/saida.log"
+verifica "trava ocupada: a métrica da rodada anterior fica idêntica" "$(cat "$CEN/metricas/deploy.prom")" \
+  cmp -s "$CEN/prom-antes" "$CEN/metricas/deploy.prom"
+
 # --- métrica -----------------------------------------------------------------
 echo "== métrica (textfile do node exporter) =="
 PROM_CRON="metricas/deploy.prom"
