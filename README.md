@@ -218,7 +218,12 @@ própria borda) por **30 dias**, para o Grafana do
   métricas. A imagem não tem shell nem `wget`: o serviço de uma vez
   `wget-loki` (BusyBox) copia um `wget` para o volume `wget-loki`, usado
   pelo healthcheck.
-- Loki, Alloy, `wget-loki` e o `socket-proxy` têm a mesma rotação de log do
+- **Disco do Loki** (`disco-loki`, script em `loki/medir-disco.sh`): BusyBox
+  sem rede que mede o volume `loki-dados` (só leitura) a cada 5 min e grava
+  `loki_dados_bytes` no volume `textfile`. O node exporter publica a série
+  (textfile collector) junto com as do host, então ela chega ao homelab
+  pelo mesmo túnel da 9100: nenhuma porta nova.
+- Loki, Alloy, `wget-loki`, `disco-loki` e o `socket-proxy` têm a mesma rotação de log do
   Docker que o Traefik (5 arquivos de 10 MB).
 
 Por que um armazenamento na VPS (até aqui só iam exporters leves): o log
@@ -245,8 +250,8 @@ com nenhum router (404 da borda) fica sem `router`.
 stream), teto de streams e tamanho de linha. Numa enxurrada (varredura de
 bots), o excesso é recusado em vez de encher o disco. E com o disco do host
 acima de 90% o Loki recusa linhas novas. Memória: 512 MB no Loki e 256 MB
-no Alloy (`mem_limit`). Uso de disco: veja o painel de Host do Grafana ou
-`docker system df -v | grep loki-dados`.
+no Alloy (`mem_limit`). Uso de disco: painel **Logs** do Grafana (disco do Loki e
+do host, com a linha dos 90%) ou `docker system df -v | grep loki-dados`.
 
 **Porta 3100 para o `metricas`.** O Grafana lê o Loki pelo mesmo túnel das
 métricas. A linha do `authorized_keys` do `metricas` precisa de

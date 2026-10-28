@@ -83,4 +83,6 @@ tem traefik/traefik.yml '2400:cb00::/32' "traefik.yml: faixas IPv6 da Cloudflare
 tem README.md '## Nuvem laranja da Cloudflare' "README: seção da nuvem laranja"
 tem README.md 'https://www.cloudflare.com/ips-v4' "README: de onde vêm as faixas da Cloudflare"
 tem README.md 'Full (strict)' "README: modo SSL/TLS Full (strict)"
+tem README.md 'loki_dados_bytes' "README: disco do Loki publicado pelo node exporter"
+tem docker-compose.yml '--collector.textfile.directory=/textfile' "node exporter lê o textfile do disco do Loki"
 exit $((falhas > 0))

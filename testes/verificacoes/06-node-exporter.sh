@@ -54,3 +54,20 @@ for alvo in "$GW_PROXY" node-exporter; do
     ok "não responde de um container vizinho na rede proxy ($alvo:9100)"
   fi
 done
+
+secao "Node exporter: disco do Loki (textfile)"
+
+# O serviço disco-loki mede /loki logo ao subir e grava loki.prom no volume
+# "textfile"; o node exporter publica a série junto com as do host (valor
+# em notação científica, ex.: 2.048e+06, por isso o awk e não um regex).
+disco_loki_publicado() {
+  curl -s --max-time 5 "$URL_NODE_LOCAL" 2>/dev/null |
+    awk '$1 == "loki_dados_bytes" && $2 + 0 > 0 { achou = 1 } END { exit !achou }'
+}
+esperar_ate 30 disco_loki_publicado
+afirmar "publica loki_dados_bytes (disco do Loki) maior que zero" disco_loki_publicado
+ID_DISCO="$(borda ps -q disco-loki)"
+afirmar "o disco-loki não tem rede (network_mode: none)" \
+  test "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$ID_DISCO" 2>/dev/null)" = none
+afirmar "o disco-loki monta os dados do Loki só para leitura" \
+  test "$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/loki"}}{{.RW}}{{end}}{{end}}' "$ID_DISCO" 2>/dev/null)" = false
