@@ -3,15 +3,20 @@
 # authorized_keys (`command="sudo /usr/local/sbin/deploy-vps <projeto>"`).
 # Roda como root. O projeto vem só do argumento (fixado no authorized_keys,
 # nunca do GitHub); nada do que o GitHub manda vira comando.
-# Uso: deploy-vps <projeto>   (projetos: conan-torres; traefik no ticket 03)
+# Uso: deploy-vps <projeto>   (projetos: conan-torres, traefik)
 #   conan-torres: SHA do commit em SSH_ORIGINAL_COMMAND; pull + up -d, espera
 #   `healthy` e confere que a imagem em uso é a do SHA. Sem rollback.
+#   traefik: a borda em /opt/traefik. Não usa SSH_ORIGINAL_COMMAND (ignorado).
+#   Recusa se o git tiver mudança local (.env e acme/ são ignorados pelo git),
+#   mostra o commit de antes e o de depois, `pull --ff-only`, `up -d`, espera
+#   Traefik, Loki e Alloy ficarem `healthy` (os três têm healthcheck no
+#   compose). Vai até a ponta da main. Sem rollback.
 # Sai com 0 se o deploy deu certo; 1 com "ERRO: ..." em qualquer recusa ou falha.
 #
 # sudoers (o env_reset padrão apaga o ambiente; só o SHA pode passar):
 #   Defaults!/usr/local/sbin/deploy-vps env_keep += "SSH_ORIGINAL_COMMAND"
 #   deploy ALL=(root) NOPASSWD: /usr/local/sbin/deploy-vps conan-torres, /usr/local/sbin/deploy-vps traefik
-# APPS_RAIZ, TRAVA_ARQUIVO, TRAVA_ESPERA e PRAZO_SAUDAVEL só existem para o
+# APPS_RAIZ, BORDA_DIR, TRAVA_ARQUIVO, TRAVA_ESPERA e PRAZO_SAUDAVEL só existem para o
 # teste local (testes/deploy.sh); pelo sudo nunca chegam, e o padrão é produção.
 set -uo pipefail
 
@@ -94,6 +99,46 @@ deploy_site() {
   echo "deploy de $projeto ok: $IMAGEM:$sha"
 }
 
+# Deploy da borda em /opt/traefik: git ff-only + up -d, espera os serviços.
+deploy_borda() {
+  local pasta="${BORDA_DIR:-/opt/traefik}"
+  cd "$pasta" || erro "pasta $pasta não encontrada"
+
+  local sujo antes depois
+  sujo="$(git status --porcelain)" || erro "git status falhou"
+  [ -z "$sujo" ] || erro "mudança local no git de $pasta; limpe-a antes do deploy"
+  antes="$(git rev-parse --short HEAD)" || erro "git rev-parse falhou"
+  echo "commit atual: $antes"
+  git pull --ff-only || erro "git pull --ff-only falhou (não é fast-forward?)"
+  depois="$(git rev-parse --short HEAD)" || erro "git rev-parse falhou"
+  echo "commit novo: $depois"
+
+  docker compose up -d --remove-orphans || erro "docker compose up -d falhou"
+
+  # Espera os três healthy, até o prazo (um prazo só para todos).
+  local prazo="${PRAZO_SAUDAVEL:-120}" svc container saude pendente=""
+  numero PRAZO_SAUDAVEL "$prazo"
+  local fim=$((SECONDS + prazo))
+  while :; do
+    pendente=""
+    for svc in traefik loki alloy; do
+      container="$(docker compose ps -q "$svc")" || erro "docker compose ps falhou"
+      saude=sem-container
+      if [ -n "$container" ] && [[ "$container" != *$'\n'* ]]; then
+        saude="$(docker inspect --format \
+          '{{if .State.Health}}{{.State.Health.Status}}{{else}}sem-healthcheck{{end}}' \
+          "$container")" || saude=erro-inspect
+      fi
+      [ "$saude" = healthy ] || pendente="$pendente $svc($saude)"
+    done
+    [ -z "$pendente" ] && break
+    [ "$SECONDS" -ge "$fim" ] \
+      && erro "não ficou healthy em ${prazo}s:$pendente"
+    sleep 2
+  done
+  echo "deploy de $projeto ok: $antes -> $depois"
+}
+
 [ "$#" -eq 1 ] || erro "uso: deploy-vps <projeto>"
 projeto="$1"
 
@@ -104,8 +149,8 @@ case "$projeto" in
     deploy_site
     ;;
   traefik)
-    # Deploy da borda (/opt/traefik): entra no ticket 03.
-    erro "deploy da borda (traefik) ainda não implementado"
+    pega_trava
+    deploy_borda
     ;;
   *) erro "projeto '$projeto' não permitido" ;;
 esac
