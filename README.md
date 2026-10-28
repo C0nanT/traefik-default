@@ -508,7 +508,7 @@ Para aplicar uma mudança da borda depois do merge na `main`: Actions →
 inclusive de PR do Dependabot, nunca atualiza a VPS sozinho. Ele recusa
 outra branch, usa os secrets do Environment `producao`, entra por `ssh` com
 `StrictHostKeyChecking=yes` (sem action de terceiros) pedindo o deploy da
-borda e, no fim, exige 200 de https://conantorres.dev/ e
+borda e, no fim, exige resposta 2xx (sem seguir redirecionamento) de https://conantorres.dev/ e
 https://bbcontainermodular.com/. O log mostra o commit de antes e o de
 depois; se algo falha, a execução fica vermelha.
 
