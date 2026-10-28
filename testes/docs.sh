@@ -103,6 +103,6 @@ done
 nao_tem .github/workflows 'auto-merge' "sem workflow de auto-merge"
 tem README.md 'Insights → Dependency graph → Dependabot' "README: onde conferir a leitura do Dependabot"
 tem README.md 'PR do Dependabot' "README: roteiro de revisão do PR do Dependabot"
-tem README.md 'chega também no `homelab-monitoring`' "README: PR do Loki chega nos dois repositórios"
-tem README.md 'aprovados juntos' "README: os dois PRs do Loki são aprovados juntos"
+tem README.md 'IMAGEM_LOKI' "README: aprovar PR do Loki atualiza o Loki falso do homelab (smoke.env)"
+tem README.md 'Loki da borda:' "README: aprovar PR do Loki atualiza a nota de versão do homelab"
 exit $((falhas > 0))

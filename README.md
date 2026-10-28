@@ -124,8 +124,10 @@ posterior. Para revisar e aplicar o PR do Dependabot:
    erro em
    Insights → Dependency graph → Dependabot.
 
-O PR do Loki chega também no `homelab-monitoring` (o Loki falso do smoke
-de lá usa a mesma tag): os dois PRs são aprovados juntos.
+O Loki falso do smoke do `homelab-monitoring` repete a tag do Loki daqui, e
+o Dependabot de lá não o enxerga. Ao aprovar um PR do Loki, atualize no
+`homelab-monitoring`, junto: o `IMAGEM_LOKI` do `testes/smoke.env` e a nota
+"Loki da borda:" do README (o `testes/docs.sh` de lá falha se divergirem).
 
 O roteiro à mão continua valendo, a qualquer momento (correção urgente).
 Para atualizar, de propósito:
