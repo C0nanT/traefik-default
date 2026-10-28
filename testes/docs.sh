@@ -201,7 +201,7 @@ tem_re "$acesso" '^ +IdentityFile ~/\.ssh/id_ed25519$' "acesso: IdentityFile da 
 tem_re "$acesso" '^ +IdentitiesOnly yes$' "acesso: IdentitiesOnly"
 tem_re "$acesso" '^ +PasswordAuthentication no$' "acesso: só chave, sem senha"
 tem_re "$acesso" '^ +StrictHostKeyChecking accept-new$' "acesso: confere a chave do servidor"
-tem "$acesso" 'só leitura' "acesso: regra de só leitura para o agente"
+tem "$acesso" 'só comandos de leitura' "acesso: regra de só leitura para o agente"
 tem "$acesso" 'rodada pelo dono' "acesso: mudanças na VPS são rodadas pelo dono"
 # Nenhum exemplo de comando usa o IP direto: falha com qualquer @IP_DA_VPS ou ssh ... IP_DA_VPS,
 # exceto o túnel de métricas (metricas@IP_DA_VPS) e a linha `HostName IP_DA_VPS` do bloco.
