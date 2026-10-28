@@ -13,9 +13,9 @@
 
 Status: ready-for-agent
 
-- [ ] README: instalar o script, criar `deploy` (shell `/bin/sh`, fora do grupo `docker`), sudoers restrito ao script + argumentos com `env_keep` de `SSH_ORIGINAL_COMMAND`
-- [ ] README: linhas do `authorized_keys` com `restrict` e `command=` por projeto, uma chave por repositório
-- [ ] README: `known_hosts` e conferência da impressão digital
-- [ ] README: Environment `producao` limitado à `main`, nomes dos secrets
-- [ ] README: script roda como root via sudo e usa o `docker login` do root para o GHCR
-- [ ] `docs.sh` confere esses pontos e passa
+- [x] README: instalar o script, criar `deploy` (shell `/bin/sh`, fora do grupo `docker`), sudoers restrito ao script + argumentos com `env_keep` de `SSH_ORIGINAL_COMMAND`
+- [x] README: linhas do `authorized_keys` com `restrict` e `command=` por projeto, uma chave por repositório
+- [x] README: `known_hosts` e conferência da impressão digital
+- [x] README: Environment `producao` limitado à `main`, nomes dos secrets
+- [x] README: script roda como root via sudo e usa o `docker login` do root para o GHCR
+- [x] `docs.sh` confere esses pontos e passa
