@@ -4,7 +4,7 @@
 
 **Spec:** ../SPEC.md
 
-**What to build:** o README da borda ganha o roteiro, que o dono roda na VPS, para: instalar o `deploy-vps` como root; criar o usuário `deploy` sem shell útil e fora do grupo `docker`; regra de sudoers que libera só o script com os dois argumentos permitidos; uma chave por repositório, cada linha do `authorized_keys` com `restrict` e `command=` fixando o projeto; gerar o `known_hosts` e conferir a impressão digital; criar o Environment `producao` (só `main`) em cada repositório com os secrets de host, chave e `known_hosts` (nomes definidos aqui e usados nos tickets 05 e 06). Mesmo estilo da seção do usuário `metricas`. O `docs.sh` confere os pontos.
+**What to build:** o README da borda ganha o roteiro, que o dono roda na VPS, para: instalar o `deploy-vps` como root; criar o usuário `deploy` fora do grupo `docker`, com shell `/bin/sh` (o sshd roda o comando forçado pelo shell do usuário; com `nologin` nada roda — a restrição vem do `restrict` + `command=`); regra de sudoers que libera só o script com os dois argumentos permitidos, com `env_keep` só de `SSH_ORIGINAL_COMMAND` (linha no cabeçalho do script); uma chave por repositório, cada linha do `authorized_keys` com `restrict` e `command=` fixando o projeto; gerar o `known_hosts` e conferir a impressão digital; criar o Environment `producao` (só `main`) em cada repositório com os secrets de host, chave e `known_hosts` (nomes definidos aqui e usados nos tickets 05 e 06). Mesmo estilo da seção do usuário `metricas`. O `docs.sh` confere os pontos.
 
 **Seams:**
 - Seam 2: `docs.sh` do traefik-default.
@@ -13,7 +13,7 @@
 
 Status: ready-for-agent
 
-- [ ] README: instalar o script, criar `deploy`, sudoers restrito ao script + argumentos
+- [ ] README: instalar o script, criar `deploy` (shell `/bin/sh`, fora do grupo `docker`), sudoers restrito ao script + argumentos com `env_keep` de `SSH_ORIGINAL_COMMAND`
 - [ ] README: linhas do `authorized_keys` com `restrict` e `command=` por projeto, uma chave por repositório
 - [ ] README: `known_hosts` e conferência da impressão digital
 - [ ] README: Environment `producao` limitado à `main`, nomes dos secrets

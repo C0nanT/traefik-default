@@ -92,7 +92,7 @@ O registro fica no histórico do Actions.
 - **Sem rollback automático** nos dois casos.
 - **Cron.** O script do cron pula toda pasta de site que tenha o arquivo-marcador `.deploy-pelo-ci`. A pasta do conan-torres na VPS ganha o marcador. Fora isso, o comportamento não muda, e o bbcontainer segue nele.
 - **Usuário e permissões na VPS.**
-  - Usuário `deploy`, sem shell útil e fora do grupo `docker`.
+  - Usuário `deploy` fora do grupo `docker`. Precisa de um shell real (`/bin/sh`): o sshd roda o comando forçado pelo shell do usuário, e com `nologin` nada roda. A restrição vem do `restrict` + `command=`, não do shell. O sudoers mantém `SSH_ORIGINAL_COMMAND` (`env_keep`), senão o SHA não chega ao script.
   - Uma linha no `authorized_keys` por repositório, com `command="sudo <script> <projeto>"` e `restrict` (equivale a `no-pty`, `no-port-forwarding` e o resto).
   - O sudoers libera para `deploy` só o script, só com os dois argumentos permitidos.
   - O usuário `deploy` precisa conseguir puxar do GHCR. Como o script roda como root pelo sudo, usa o `docker login` que já existe para o root.
