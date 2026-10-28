@@ -215,11 +215,12 @@ fi
 tem README.md 'ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 -L 9100:127.0.0.1:9100 -L 3100:127.0.0.1:3100 vps' "README: túnel do painel usa ssh vps"
 tem README.md 'metricas@IP_DA_VPS' "README: túnel de métricas mantém metricas@IP_DA_VPS"
 # Hook de pre-commit: versionado, executável, roda os dois testes rápidos e o README ensina a ativar.
-H=.githooks/pre-commit
-if [ -x "$H" ]; then echo "ok    hook de pre-commit existe e é executável"; else echo "FALHA hook de pre-commit ausente ou sem permissão de execução ($H)"; falhas=$((falhas + 1)); fi
-tem "$H" 'testes/docs.sh' "hook roda o docs.sh"
-tem "$H" 'testes/deploy.sh' "hook roda o deploy.sh"
-nao_tem "$H" 'smoke.sh' "hook não roda o smoke (sobe a borda inteira)"
+HOOK=.githooks/pre-commit
+if [ -x "$HOOK" ]; then echo "ok    hook de pre-commit existe e é executável"; else echo "FALHA hook de pre-commit ausente ou sem permissão de execução ($HOOK)"; falhas=$((falhas + 1)); fi
+tem_re "$HOOK" '^[^#]*testes/docs\.sh' "hook roda o docs.sh (fora de comentário)"
+tem_re "$HOOK" '^[^#]*testes/deploy\.sh' "hook roda o deploy.sh (fora de comentário)"
+nao_tem "$HOOK" 'smoke.sh' "hook não roda o smoke (sobe a borda inteira)"
+tem_re "$HOOK" 'checkout-index' "hook testa o índice (o que será commitado), não a árvore de trabalho"
 tem README.md 'git config core.hooksPath .githooks' "README: comando que ativa o hook"
 tem README.md '--no-verify' "README: como pular o hook"
 exit $((falhas > 0))
