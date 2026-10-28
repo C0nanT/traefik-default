@@ -11,6 +11,7 @@ simples para plugar sites. Cada site vive no próprio repositório e entra pelo
 [Plugar um site](docs/como-plugar-um-projeto.md) ·
 [Painel e métricas](#painel-e-métricas-via-túnel-ssh) ·
 [Logs](#logs-loki-e-alloy) ·
+[Deploy pelo CI](#deploy-pelo-ci-usuário-deploy) ·
 [Certificados](#certificados-lets-encrypt) ·
 [Próximos passos](#próximos-passos)
 
@@ -381,6 +382,125 @@ O resto (gerar a chave, pegar o `known_hosts` da VPS, preencher o `.env` e
 subir o túnel em container) está em "Túnel até a VPS" no README do
 [`homelab-monitoring`](../homelab-monitoring). Para revogar o acesso, apague
 a linha do `authorized_keys` (ou `sudo deluser --remove-home metricas`).
+
+## Deploy pelo CI (usuário `deploy`)
+
+O GitHub Actions faz o deploy entrando na VPS por SSH com um usuário
+próprio, `deploy`. Ele não está no grupo `docker` e não tem terminal, túnel
+nem comando livre: cada chave só consegue rodar
+`sudo /usr/local/sbin/deploy-vps <projeto>`, com o projeto fixado na linha
+do `authorized_keys`. O único dado que vem do GitHub é o SHA do commit, e o
+script confere que são 40 caracteres hexadecimais antes de usar. Há uma
+chave por repositório: a do `conan-torres` só faz deploy do site, a do
+`traefik-default` só faz deploy da borda. Se uma chave vazar, dá para
+disparar o deploy daquele projeto (até a ponta da `main`) e nada mais.
+
+O script roda como root pelo sudo, então o `docker compose pull` usa o
+`docker login ghcr.io` do root, o mesmo do cron. Não precisa de login novo.
+
+Na VPS, uma vez:
+
+1. Instale o script como root (repita depois de cada mudança em
+   `vps/deploy-vps.sh`; o deploy da borda atualiza `/opt/traefik`, mas não
+   reinstala o script):
+   ```bash
+   sudo install -m 755 -o root -g root /opt/traefik/vps/deploy-vps.sh /usr/local/sbin/deploy-vps
+   ```
+2. Crie o usuário, sem senha e **fora** do grupo `docker`:
+   ```bash
+   sudo adduser --disabled-password --gecos "" --shell /bin/sh deploy
+   id deploy   # só o grupo deploy; nada de docker nem sudo
+   ```
+   O shell precisa ser real (`/bin/sh`): o `sshd` roda o comando forçado
+   pelo shell do usuário, e com `nologin` nada roda. Quem restringe é o
+   `restrict` + `command=` do passo 4, não o shell.
+3. Libere no sudoers só o script, só com os dois argumentos permitidos. O
+   `env_reset` padrão do sudo apaga o ambiente; o `env_keep` deixa passar só
+   o `SSH_ORIGINAL_COMMAND`, onde chega o SHA. Valide antes de instalar (um
+   sudoers quebrado trava o sudo de todo mundo):
+   ```bash
+   cat > /tmp/deploy-vps.sudoers <<'FIM'
+   Defaults!/usr/local/sbin/deploy-vps env_keep += "SSH_ORIGINAL_COMMAND"
+   deploy ALL=(root) NOPASSWD: /usr/local/sbin/deploy-vps conan-torres, /usr/local/sbin/deploy-vps traefik
+   FIM
+   sudo visudo -cf /tmp/deploy-vps.sudoers \
+     && sudo install -m 440 -o root -g root /tmp/deploy-vps.sudoers /etc/sudoers.d/deploy-vps
+   rm /tmp/deploy-vps.sudoers
+   sudo -l -U deploy   # deve listar só as duas linhas do deploy-vps
+   ```
+4. Gere **no seu PC** uma chave ed25519 por repositório, sem senha (o
+   Actions não tem como digitar), fora de qualquer repositório:
+   ```bash
+   ssh-keygen -t ed25519 -N "" -C deploy@conan-torres -f ~/.ssh/deploy-conan-torres
+   ssh-keygen -t ed25519 -N "" -C deploy@traefik-default -f ~/.ssh/deploy-traefik-default
+   ```
+   A parte privada vai **só** para o secret do GitHub (passo 6); nunca para
+   um commit. Na VPS entram as públicas (`.pub`), uma por linha, cada uma com
+   o projeto fixado:
+   ```bash
+   sudo install -d -m 700 -o deploy -g deploy /home/deploy/.ssh
+   sudo tee /home/deploy/.ssh/authorized_keys >/dev/null <<'FIM'
+   restrict,command="sudo /usr/local/sbin/deploy-vps conan-torres" ssh-ed25519 AAAA...CHAVE_DO_CONAN_TORRES... deploy@conan-torres
+   restrict,command="sudo /usr/local/sbin/deploy-vps traefik" ssh-ed25519 AAAA...CHAVE_DO_TRAEFIK_DEFAULT... deploy@traefik-default
+   FIM
+   sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys
+   sudo chmod 600 /home/deploy/.ssh/authorized_keys
+   ```
+   `restrict` desliga terminal, agente, X11 e encaminhamentos; `command=`
+   troca qualquer comando pedido pelo deploy-vps daquele projeto (o que o
+   cliente pediu fica em `SSH_ORIGINAL_COMMAND`). Se existir `AllowUsers` ou
+   `AllowGroups` no `sshd`, inclua o `deploy` (confira com
+   `sudo sshd -T -C user=deploy,host=github,addr=1.2.3.4 | grep -iE '^allow(users|groups) '`).
+5. Gere o `known_hosts` **no seu PC** e confira a impressão digital com a
+   que a própria VPS mostra (assim o GitHub não manda a chave para uma
+   máquina falsa):
+   ```bash
+   # No PC:
+   ssh-keyscan -t ed25519 IP_DA_VPS > known_hosts-vps
+   ssh-keygen -lf known_hosts-vps
+   # Na VPS (por uma sessão que você já confia):
+   ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+   ```
+   Os dois `SHA256:...` precisam ser iguais. Se forem diferentes, pare.
+6. Em **cada** repositório (`conan-torres` e `traefik-default`), crie o
+   Environment `producao` limitado à `main`: Settings → Environments → New
+   environment → `producao` → Deployment branches and tags →
+   `Selected branches and tags` → Add rule → `main`. Depois os secrets, **do
+   Environment** (não do repositório), cada repositório com a própria chave:
+
+   | Secret            | Conteúdo                                                   |
+   |-------------------|------------------------------------------------------------|
+   | `VPS_HOST`        | IP (ou nome) da VPS, o mesmo usado no `ssh-keyscan`         |
+   | `VPS_SSH_KEY`     | a chave **privada** daquele repositório                     |
+   | `VPS_KNOWN_HOSTS` | o conteúdo de `known_hosts-vps` conferido no passo 5        |
+
+   Pelo `gh`, sem colar a chave em lugar nenhum. Primeiro o site; depois
+   repita com `R=C0nanT/traefik-default; K=~/.ssh/deploy-traefik-default`:
+   ```bash
+   R=C0nanT/conantorres.dev; K=~/.ssh/deploy-conan-torres
+   gh secret set VPS_HOST --env producao -R "$R" --body IP_DA_VPS
+   gh secret set VPS_SSH_KEY --env producao -R "$R" < "$K"
+   gh secret set VPS_KNOWN_HOSTS --env producao -R "$R" < known_hosts-vps
+   ```
+   O usuário `deploy` é fixo nos workflows e não vira secret.
+7. Teste a restrição do PC (manual, uma vez), **só com a chave do
+   `conan-torres`** (a do `traefik-default` dispara o deploy da borda de
+   verdade):
+   ```bash
+   # Comando livre vira o deploy-vps, que recusa: "ERRO: SHA inválido ..."
+   ssh -i ~/.ssh/deploy-conan-torres -o IdentitiesOnly=yes deploy@IP_DA_VPS id
+   # Túnel recusado: "administratively prohibited" e o curl falha
+   ssh -i ~/.ssh/deploy-conan-torres -o IdentitiesOnly=yes -N -L 18082:127.0.0.1:8082 deploy@IP_DA_VPS &
+   sleep 3; curl -s http://localhost:18082/metrics | head -3; kill %1
+   ```
+8. Depois do teste, apague as chaves privadas e o `known_hosts-vps` do PC
+   (`rm ~/.ssh/deploy-conan-torres ~/.ssh/deploy-traefik-default known_hosts-vps`);
+   a privada fica só no secret. Se precisar de novo, gere outra e troque a
+   linha do `authorized_keys` e o secret.
+
+Para revogar o acesso de um repositório, apague a linha dele no
+`authorized_keys` (ou `sudo deluser --remove-home deploy` para todos) e o
+secret `VPS_SSH_KEY` do Environment.
 
 ## Certificados (Let's Encrypt)
 

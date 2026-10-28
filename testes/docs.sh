@@ -114,4 +114,24 @@ tem_re README.md 'Dependency graph → Dependabot que o GitHub leu' "README: che
 tem README.md 'PR do Dependabot' "README: roteiro de revisão do PR do Dependabot"
 tem README.md 'IMAGEM_LOKI' "README: aprovar PR do Loki atualiza o Loki falso do homelab (smoke.env)"
 tem README.md 'Loki da borda:' "README: aprovar PR do Loki atualiza a nota de versão do homelab"
+# Deploy pelo CI: usuário deploy, sudoers, chaves e Environment (ticket 04).
+tem README.md '## Deploy pelo CI (usuário `deploy`)' "README: seção do usuário deploy"
+tem README.md 'install -m 755 -o root -g root /opt/traefik/vps/deploy-vps.sh /usr/local/sbin/deploy-vps' "README: instala o deploy-vps como root"
+tem README.md '--shell /bin/sh deploy' "README: deploy com shell real (/bin/sh)"
+nao_tem README.md 'usermod -aG docker deploy' "README: deploy fora do grupo docker"
+tem README.md 'Defaults!/usr/local/sbin/deploy-vps env_keep += "SSH_ORIGINAL_COMMAND"' "README: sudoers mantém só SSH_ORIGINAL_COMMAND"
+tem README.md 'deploy ALL=(root) NOPASSWD: /usr/local/sbin/deploy-vps conan-torres, /usr/local/sbin/deploy-vps traefik' "README: sudoers libera só o script com os dois argumentos"
+tem README.md 'visudo -cf' "README: valida o sudoers com visudo -cf"
+tem README.md 'restrict,command="sudo /usr/local/sbin/deploy-vps conan-torres"' "README: chave do conan-torres presa ao projeto"
+tem README.md 'restrict,command="sudo /usr/local/sbin/deploy-vps traefik"' "README: chave do traefik-default presa à borda"
+tem README.md 'ssh-keygen -t ed25519' "README: uma chave ed25519 por repositório"
+tem README.md 'ssh-keyscan' "README: known_hosts pelo ssh-keyscan"
+tem README.md 'ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub' "README: impressão digital conferida na VPS"
+tem README.md 'Environment `producao`' "README: Environment producao"
+tem README.md 'Selected branches and tags' "README: Environment limitado por regra de branch"
+for s in VPS_HOST VPS_SSH_KEY VPS_KNOWN_HOSTS; do
+  tem README.md "$s" "README: secret $s"
+done
+tem README.md '--env producao' "README: secrets do Environment, não do repositório"
+tem README.md 'docker login ghcr.io` do root' "README: deploy-vps usa o docker login do root"
 exit $((falhas > 0))
