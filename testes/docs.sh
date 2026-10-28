@@ -21,6 +21,14 @@ nao_tem() { # arquivo padrão descrição
     echo "ok    $3"
   fi
 }
+tem_re() { # arquivo regex-estendida descrição
+  if grep -qE -- "$2" "$1" 2>/dev/null; then
+    echo "ok    $3"
+  else
+    echo "FALHA $3 ($1: /$2/)"
+    falhas=$((falhas + 1))
+  fi
+}
 G=docs/como-plugar-um-projeto.md
 for n in web websecure proxy le-dns le-http 'seguranca@file' 'compressao@file' 'www-para-raiz@file'; do
   tem $G "$n" "guia lista $n"
@@ -85,4 +93,25 @@ tem README.md 'https://www.cloudflare.com/ips-v4' "README: de onde vêm as faixa
 tem README.md 'Full (strict)' "README: modo SSL/TLS Full (strict)"
 tem README.md 'loki_dados_bytes' "README: disco do Loki publicado pelo node exporter"
 tem docker-compose.yml '--collector.textfile.directory=/textfile' "node exporter lê o textfile do disco do Loki"
+# Dependabot: um PR mensal com as imagens da borda.
+D=.github/dependabot.yml
+tem_re $D '^  - package-ecosystem: docker-compose$' "Dependabot: ecossistema docker-compose"
+tem_re $D '^    directories:$' "Dependabot: uma entrada só, com lista de diretórios (um PR por mês)"
+tem_re $D '^      - "/"$' "Dependabot: diretório / (compose principal)"
+tem_re $D '^      - "/exemplos/whoami"$' "Dependabot: diretório /exemplos/whoami"
+nao_tem $D '    directory:' "Dependabot: sem entrada separada por diretório"
+n=$(grep -cE '^  - package-ecosystem:' $D)
+if [ "$n" = 1 ]; then echo "ok    Dependabot: uma única entrada de update"; else echo "FALHA Dependabot: esperada 1 entrada de update, há $n"; falhas=$((falhas + 1)); fi
+tem $D 'interval: monthly' "Dependabot: agenda mensal"
+tem $D 'default-days: 14' "Dependabot: cooldown de 14 dias"
+tem $D 'dependency-name: busybox' "Dependabot: regra do BusyBox"
+tem $D 'version-update:semver-minor' "Dependabot: BusyBox sem salto de linha (semver-minor ignorado)"
+nao_tem $D 'open-pull-requests-limit: 0' "Dependabot: limite de PRs acima de 0"
+if [ -n "$(ls .github/workflows 2>/dev/null)" ]; then echo "FALHA .github/workflows não deve ter arquivos (sem auto-merge)"; falhas=$((falhas + 1)); else echo "ok    sem workflow de auto-merge"; fi
+tem README.md 'Insights → Dependency graph → Dependabot' "README: onde conferir a leitura do Dependabot"
+tem README.md 'Atualização das imagens (Dependabot)' "README: item do Dependabot no checklist manual"
+tem_re README.md 'Dependency graph → Dependabot que o GitHub leu' "README: checklist manual manda conferir o Dependency graph depois do merge"
+tem README.md 'PR do Dependabot' "README: roteiro de revisão do PR do Dependabot"
+tem README.md 'IMAGEM_LOKI' "README: aprovar PR do Loki atualiza o Loki falso do homelab (smoke.env)"
+tem README.md 'Loki da borda:' "README: aprovar PR do Loki atualiza a nota de versão do homelab"
 exit $((falhas > 0))

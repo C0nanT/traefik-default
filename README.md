@@ -107,6 +107,29 @@ aparece em um único arquivo:
 O smoke test não repete nenhuma delas: usa a imagem do Traefik do container
 em execução e lê a do whoami do exemplo.
 
+O caminho normal é o **PR do Dependabot**: uma vez por mês ele abre um PR
+com as imagens que tiveram versão nova, só com versões publicadas há pelo
+menos 14 dias (config em `.github/dependabot.yml`). Duas regras do BusyBox:
+o Dependabot mantém o sufixo `-musl` e, como o `ignore` não aceita curinga
+para barrar as versões `X.Y.0` (instáveis), só propõe patches da linha
+atual; subir de linha (1.36 para 1.37) é à mão, com um `X.Y.1` ou
+posterior. Para revisar e aplicar o PR do Dependabot:
+
+1. Leia as notas de versão que o PR mostra (e o "upgrade guide" do Loki).
+2. No seu computador, pegue a branch do PR e rode `testes/smoke.sh`.
+3. Aprove e mescle o PR (nada é mesclado sozinho).
+4. Na VPS: `git pull` e `docker compose up -d` (com `pull` antes, como no
+   passo 3 do roteiro à mão abaixo).
+5. Depois do primeiro merge da configuração, confira se o GitHub a leu sem
+   erro em
+   Insights → Dependency graph → Dependabot.
+
+O Loki falso do smoke do `homelab-monitoring` repete a tag do Loki daqui, e
+o Dependabot de lá não o enxerga. Ao aprovar um PR do Loki, atualize no
+`homelab-monitoring`, junto: o `IMAGEM_LOKI` do `testes/smoke.env` e a nota
+"Loki da borda:" do README (o `testes/docs.sh` de lá falha se divergirem).
+
+O roteiro à mão continua valendo, a qualquer momento (correção urgente).
 Para atualizar, de propósito:
 
 1. Leia as notas de versão do Traefik
@@ -555,6 +578,12 @@ Marque cada item ao validar:
       (ex.: `blog.dominio`) é servido com o mesmo certificado, sem emissão nova.
 - [ ] Site em `le-http`: SAN = só os nomes exatos (`dominio`, e o `www`
       com o certificado dele); nenhum curinga.
+
+**Atualização das imagens (Dependabot)**
+- [ ] Depois do merge da configuração, conferir em
+      Insights → Dependency graph → Dependabot que o GitHub leu o
+      `.github/dependabot.yml` sem erro e lista os dois diretórios (`/` e
+      `/exemplos/whoami`).
 
 ### Estudo extra: delegação do DNS-01 por CNAME
 
