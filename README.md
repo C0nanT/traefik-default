@@ -112,7 +112,9 @@ em execução e lê a do whoami do exemplo.
 
 O caminho normal é o **PR do Dependabot**: uma vez por mês ele abre um PR
 com as imagens que tiveram versão nova, só com versões publicadas há pelo
-menos 14 dias (config em `.github/dependabot.yml`). Duas regras do BusyBox:
+menos 14 dias (config em `.github/dependabot.yml`). Um segundo PR mensal,
+com a mesma espera, atualiza as actions de `.github/workflows`
+(ecossistema `github-actions`). Duas regras do BusyBox:
 o Dependabot mantém o sufixo `-musl` e, como o `ignore` não aceita curinga
 para barrar as versões `X.Y.0` (instáveis), só propõe patches da linha
 atual; subir de linha (1.36 para 1.37) é à mão, com um `X.Y.1` ou
@@ -121,8 +123,10 @@ posterior. Para revisar e aplicar o PR do Dependabot:
 1. Leia as notas de versão que o PR mostra (e o "upgrade guide" do Loki).
 2. No seu computador, pegue a branch do PR e rode `testes/smoke.sh`.
 3. Aprove e mescle o PR (nada é mesclado sozinho).
-4. Na VPS: `git pull` e `docker compose up -d` (com `pull` antes, como no
-   passo 3 do roteiro à mão abaixo).
+4. Aplique na VPS pelo botão de deploy (Actions → Deploy da borda → Run
+   workflow, veja "Deploy pelo CI" abaixo) ou à mão: `git pull` e
+   `docker compose up -d` (com `pull` antes, como no passo 3 do roteiro à
+   mão abaixo).
 5. Depois do primeiro merge da configuração, confira se o GitHub a leu sem
    erro em
    Insights → Dependency graph → Dependabot.
@@ -498,6 +502,16 @@ Na VPS, uma vez:
    a privada fica só no secret. Se precisar de novo, gere outra e troque a
    linha do `authorized_keys` e o secret.
 
+Para aplicar uma mudança da borda depois do merge na `main`: Actions →
+**Deploy da borda** → **Run workflow** (branch `main`). O workflow
+(`.github/workflows/deploy-borda.yml`) só roda por esse botão: um merge,
+inclusive de PR do Dependabot, nunca atualiza a VPS sozinho. Ele recusa
+outra branch, usa os secrets do Environment `producao`, entra por `ssh` com
+`StrictHostKeyChecking=yes` (sem action de terceiros) pedindo o deploy da
+borda e, no fim, exige 200 de https://conantorres.dev/ e
+https://bbcontainermodular.com/. O log mostra o commit de antes e o de
+depois; se algo falha, a execução fica vermelha.
+
 Para revogar o acesso de um repositório, apague a linha dele no
 `authorized_keys` (ou `sudo deluser --remove-home deploy` para todos) e o
 secret `VPS_SSH_KEY` do Environment.
@@ -705,7 +719,7 @@ Marque cada item ao validar:
 - [ ] Depois do merge da configuração, conferir em
       Insights → Dependency graph → Dependabot que o GitHub leu o
       `.github/dependabot.yml` sem erro e lista os dois diretórios (`/` e
-      `/exemplos/whoami`).
+      `/exemplos/whoami`) e o ecossistema `github-actions`.
 
 ### Estudo extra: delegação do DNS-01 por CNAME
 
