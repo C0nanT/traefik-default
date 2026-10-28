@@ -1,0 +1,82 @@
+# Deploy da borda pelo botão "Run workflow" (Actions → Deploy da borda).
+# Só manual: merge na main (inclusive PR do Dependabot) nunca atualiza a VPS.
+# Na VPS, a chave deste repositório só roda `deploy-vps traefik`: atualiza
+# /opt/traefik com --ff-only, sobe a pilha e espera Traefik, Loki e Alloy.
+# Sem action de terceiros para o SSH e sem checkout: só ssh e curl do runner.
+name: Deploy da borda
+
+on:
+  workflow_dispatch:
+
+# O GITHUB_TOKEN não é usado: nenhuma permissão.
+permissions: {}
+
+# Um deploy por vez; o seguinte espera (o script na VPS também tem trava).
+concurrency:
+  group: deploy-borda
+  cancel-in-progress: false
+
+jobs:
+  # Recusa antes de tocar no Environment: o deploy é sempre da main.
+  so-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recusa rodar fora da main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::O deploy da borda só roda pela main (pedido em $GITHUB_REF)."
+          exit 1
+
+  deploy:
+    needs: so-main
+    runs-on: ubuntu-latest
+    # Secrets do Environment (liberado só para a main), não do repositório.
+    environment: producao
+    timeout-minutes: 10
+    steps:
+      - name: Deploy pela VPS (ssh)
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          # Chave e known_hosts em arquivos temporários, só legíveis pelo
+          # runner, apagados no fim do passo.
+          umask 077
+          dir=$(mktemp -d "$RUNNER_TEMP/ssh.XXXXXX")
+          trap 'rm -rf "$dir"' EXIT
+          printf '%s\n' "$VPS_SSH_KEY" > "$dir/chave"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$dir/known_hosts"
+          # StrictHostKeyChecking=yes: se a impressão digital da VPS não for a
+          # do secret, o ssh para (a chave não vai para uma máquina falsa).
+          # O comando "traefik" é só um rótulo: o authorized_keys força o
+          # deploy-vps da borda, que não lê nada do que o cliente manda.
+          ssh -T \
+            -i "$dir/chave" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$dir/known_hosts" \
+            -o ConnectTimeout=20 \
+            "deploy@$VPS_HOST" traefik
+
+      - name: Confere os dois domínios por fora
+        run: |
+          set -uo pipefail
+          # Só leitura. Exige sucesso (2xx) direto, sem seguir redirecionamento:
+          # as duas raízes respondem 200 (o www do bbcontainer é que redireciona).
+          falhou=0
+          for url in https://conantorres.dev/ https://bbcontainermodular.com/; do
+            codigo=$(curl -sS -o /dev/null -w '%{http_code}' \
+              --max-time 20 --retry 5 --retry-delay 5 --retry-all-errors "$url") \
+              || codigo="${codigo:-erro}"
+            case "$codigo" in
+              2[0-9][0-9]) echo "ok    $url respondeu $codigo" ;;
+              *)
+                echo "::error::$url respondeu $codigo (esperado 2xx)"
+                falhou=1
+                ;;
+            esac
+          done
+          exit "$falhou"
