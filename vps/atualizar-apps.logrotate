@@ -4,4 +4,7 @@
   compress
   missingok
   notifempty
+  # Renomeia e cria o arquivo novo legível (o padrão seria 0640 root:adm, e o
+  # Alloy, que roda sem root, não leria). O Alloy segue o novo pelo caminho.
+  create 0644 root root
 }

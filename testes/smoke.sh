@@ -63,6 +63,12 @@ export IMAGEM_WHOAMI
 
 REDE_CRIADA=0
 
+# Pasta do log do cron: o compose monta ${LOG_CRON_DIR} no Alloy; aqui é uma
+# temporária, em vez do /var/log real da máquina (08-log-cron.sh escreve nela).
+LOG_CRON_DIR="$(mktemp -d)"
+chmod 755 "$LOG_CRON_DIR"
+export LOG_CRON_DIR
+
 limpar() {
   secao "Derrubando a pilha"
   sites down -v --remove-orphans >/dev/null 2>&1 || true
@@ -70,6 +76,7 @@ limpar() {
   if [ "$REDE_CRIADA" = 1 ]; then
     docker network rm proxy >/dev/null 2>&1 || true
   fi
+  rm -rf "$LOG_CRON_DIR"
 }
 
 finalizar() {

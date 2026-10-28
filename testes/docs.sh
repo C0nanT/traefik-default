@@ -150,4 +150,11 @@ tem README.md 'sudo rm /usr/local/sbin/' "limpeza: apaga o script instalado"
 tem README.md 'sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh' "limpeza: reinstala o script do cron"
 tem README.md 'gh api -X DELETE repos/C0nanT/traefik-default/environments/producao' "limpeza: apaga o Environment producao da borda"
 tem README.md 'gh api -X DELETE repos/C0nanT/conantorres.dev/environments/producao' "limpeza: apaga o Environment producao do site"
+# Log do cron no Loki (ticket 03).
+tem alloy/config.alloy 'loki.source.file "atualizar_apps"' "Alloy lê o log do cron (loki.source.file)"
+tem_re alloy/config.alloy 'job +=  *"atualizar-apps"' "Alloy rotula o log do cron com job=atualizar-apps"
+tem docker-compose.yml '${LOG_CRON_DIR:-/var/log}:/log-host:ro' "compose monta a pasta do log do cron só leitura"
+tem vps/atualizar-apps.logrotate 'create 0644 root root' "logrotate recria o log legível pelo Alloy"
+tem README.md '{job="atualizar-apps"}' "README: consulta LogQL do log do cron"
+tem testes/verificacoes/08-log-cron.sh 'job=atualizar-apps' "smoke confere a linha do cron no Loki com o rótulo"
 exit $((falhas > 0))

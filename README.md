@@ -264,6 +264,12 @@ linha e sai na consulta com `| json`):
 | `tipo` | `acesso`, `traefik` | só nas linhas do Traefik: JSON de acesso ou log próprio |
 | `router` | ex.: `conan-torres@docker` | só nas linhas de acesso, do campo `RouterName` |
 
+O log do cron (`/var/log/atualizar-apps.log`) não vem de container: o Alloy
+o lê do arquivo, montado só leitura (a pasta `/var/log`, para sobreviver à
+rotação do logrotate), e o envia com **um** rótulo, `job="atualizar-apps"`,
+sem os de cima. No Grafana ou no `curl` abaixo: `{job="atualizar-apps"}`, ou
+`{job="atualizar-apps"} |= "ERRO"` para só os erros.
+
 O `router` vem do `RouterName` (os routers configurados, um conjunto
 fechado), **nunca** do `RequestHost`: o Host vem do cliente, e bots mandando
 qualquer Host criariam um stream novo por valor. Requisição que não casou
@@ -305,6 +311,10 @@ curl -s -G http://127.0.0.1:3100/loki/api/v1/query_range \
   --data-urlencode 'query={projeto="conan-torres", stream="stderr"}' \
   --data-urlencode 'since=1h' --data-urlencode 'limit=50' \
   | python3 -c 'import json,sys; [print(l) for r in json.load(sys.stdin)["data"]["result"] for _, l in r["values"]]'
+# Log do cron de atualização dos sites (últimas 24 horas)
+curl -s -G http://127.0.0.1:3100/loki/api/v1/query_range \
+  --data-urlencode 'query={job="atualizar-apps"}' \
+  --data-urlencode 'since=24h' --data-urlencode 'limit=50'
 # Respostas 5xx do log de acesso nas últimas 6 horas
 curl -s -G http://127.0.0.1:3100/loki/api/v1/query_range \
   --data-urlencode 'query={tipo="acesso"} | json | DownstreamStatus >= 500' \
