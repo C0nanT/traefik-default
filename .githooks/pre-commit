@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Pre-commit da borda: roda os dois testes rápidos (sem contêiner, sem Docker real).
 # Testa o que está no índice (o que será commitado), não a árvore de trabalho.
+# Cada teste tem teto de 3s (hoje ~1s): passou disso, a suíte deixou de ser rápida e o commit é recusado.
 # O smoke fica de fora: sobe a borda inteira. Pular numa emergência: git commit --no-verify.
 raiz="$(git rev-parse --show-toplevel)" || exit 1
 cd "$raiz" || exit 1
@@ -11,7 +12,7 @@ cd "$snapshot" || exit 1
 reprovados=()
 for teste in testes/docs.sh testes/deploy.sh; do
   echo ">> $teste"
-  bash "$teste" || reprovados+=("$teste")
+  timeout 3 bash "$teste" || reprovados+=("$teste")
 done
 if [ "${#reprovados[@]}" -gt 0 ]; then
   echo
