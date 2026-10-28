@@ -55,10 +55,13 @@ Este arquivo fica em `.scratch/` (versionado junto com SPEC e tickets).
 4. Deploy pelo CI via SSH (hoje o cron cobre, com atraso de até 10 min e erro só no log da VPS).
 5. Token da Cloudflare por arquivo (`CF_DNS_API_TOKEN_FILE`) em vez de variável de ambiente.
 6. Backup do volume `conan-torres_leitor-data` (SQLite do leitor) e de `/opt/traefik/acme/`.
-7. Limpeza de código apontada na revisão (não bloqueante):
-   - `traefik-default`: duplicação dos helpers de teste (`afirmar_*`), `healthcheck` no exemplo do whoami, âncoras YAML nos emissores.
-   - `bbcontainer`: contrato do Traefik descrito em 4 lugares (compose, README, MAIN.md, guia).
-   - `conan-torres`: blocos repetidos entre `docker-compose.yml` e `docker-compose.prod.yml`.
+7. ~~Limpeza de código apontada na revisão~~ **fechada em 2026-10-28:**
+   - Feito: helpers `afirmar_*` do smoke unificados em `conferir` (`testes/lib.sh`).
+   - Descartados:
+     - `healthcheck` no whoami: a imagem é scratch, exceção já documentada no exemplo;
+     - âncoras YAML nos emissores: ganho de 2 linhas, risco na config estática do Traefik;
+     - contrato do Traefik no `bbcontainer`: README e MAIN.md só apontam o guia, e o projeto está parado;
+     - compose dev/prod do `conan-torres`: o prod é copiado sozinho para a VPS, e um override quebraria isso.
 
 ## Operação na VPS
 

@@ -104,50 +104,45 @@ afirmar_status() {
   return 1
 }
 
-# afirmar_cabecalho DESCRICAO NOME VALOR_ESPERADO  (igualdade exata)
-afirmar_cabecalho() {
-  local desc="$1" nome="$2" esperado="$3" valor
-  valor="$(cabecalho "$nome")"
-  if [ "$valor" = "$esperado" ]; then
+# conferir DESCRICAO DETALHE_DA_FALHA COMANDO...  -> OK se o comando der certo;
+# senão, falha com o detalhe. Base das asserções de cabeçalho e corpo abaixo.
+conferir() {
+  local desc="$1" detalhe="$2"
+  shift 2
+  if "$@"; then
     ok "$desc"
   else
-    falha "$desc" "$nome esperado: '$esperado'; recebido: '$valor'"
+    falha "$desc" "$detalhe"
     return 1
   fi
+}
+
+# contem TEXTO TRECHO / nao_contem TEXTO TRECHO
+contem() { [[ "$1" == *"$2"* ]]; }
+nao_contem() { ! contem "$1" "$2"; }
+
+# afirmar_cabecalho DESCRICAO NOME VALOR_ESPERADO  (igualdade exata)
+afirmar_cabecalho() {
+  local valor
+  valor="$(cabecalho "$2")"
+  conferir "$1" "$2 esperado: '$3'; recebido: '$valor'" [ "$valor" = "$3" ]
 }
 
 # afirmar_cabecalho_contem DESCRICAO NOME TRECHO
 afirmar_cabecalho_contem() {
-  local desc="$1" nome="$2" trecho="$3" valor
-  valor="$(cabecalho "$nome")"
-  if [[ "$valor" == *"$trecho"* ]]; then
-    ok "$desc"
-  else
-    falha "$desc" "$nome deveria conter '$trecho'; recebido: '$valor'"
-    return 1
-  fi
+  local valor
+  valor="$(cabecalho "$2")"
+  conferir "$1" "$2 deveria conter '$3'; recebido: '$valor'" contem "$valor" "$3"
 }
 
 # afirmar_corpo_contem DESCRICAO TRECHO
 afirmar_corpo_contem() {
-  local desc="$1" trecho="$2"
-  if [[ "$RESP_BODY" == *"$trecho"* ]]; then
-    ok "$desc"
-  else
-    falha "$desc" "corpo deveria conter '$trecho'"
-    return 1
-  fi
+  conferir "$1" "corpo deveria conter '$2'" contem "$RESP_BODY" "$2"
 }
 
 # afirmar_corpo_nao_contem DESCRICAO TRECHO
 afirmar_corpo_nao_contem() {
-  local desc="$1" trecho="$2"
-  if [[ "$RESP_BODY" != *"$trecho"* ]]; then
-    ok "$desc"
-  else
-    falha "$desc" "corpo não deveria conter '$trecho'"
-    return 1
-  fi
+  conferir "$1" "corpo não deveria conter '$2'" nao_contem "$RESP_BODY" "$2"
 }
 
 # afirmar DESCRICAO COMANDO...  -> OK se o comando terminar com sucesso.
