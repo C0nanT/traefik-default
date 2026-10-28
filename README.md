@@ -107,6 +107,27 @@ aparece em um único arquivo:
 O smoke test não repete nenhuma delas: usa a imagem do Traefik do container
 em execução e lê a do whoami do exemplo.
 
+O caminho normal é o **PR do Dependabot**: uma vez por mês ele abre um PR
+com as imagens que tiveram versão nova, só com versões publicadas há pelo
+menos 14 dias (config em `.github/dependabot.yml`). Duas regras do BusyBox:
+o Dependabot mantém o sufixo `-musl` e, como o `ignore` não aceita curinga
+para barrar as versões `X.Y.0` (instáveis), só propõe patches da linha
+atual; subir de linha (1.36 para 1.37) é à mão, com um `X.Y.1` ou
+posterior. Para revisar e aplicar o PR do Dependabot:
+
+1. Leia as notas de versão que o PR mostra (e o "upgrade guide" do Loki).
+2. No seu computador, pegue a branch do PR e rode `testes/smoke.sh`.
+3. Aprove e mescle o PR (nada é mesclado sozinho).
+4. Na VPS: `git pull` e `docker compose up -d` (com `pull` antes, como no
+   passo 3 do roteiro à mão abaixo).
+5. Depois do primeiro merge da configuração, confira se o GitHub a leu sem
+   erro em
+   Insights → Dependency graph → Dependabot.
+
+O PR do Loki chega também no `homelab-monitoring` (o Loki falso do smoke
+de lá usa a mesma tag): os dois PRs são aprovados juntos.
+
+O roteiro à mão continua valendo, a qualquer momento (correção urgente).
 Para atualizar, de propósito:
 
 1. Leia as notas de versão do Traefik

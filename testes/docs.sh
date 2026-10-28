@@ -85,4 +85,24 @@ tem README.md 'https://www.cloudflare.com/ips-v4' "README: de onde vêm as faixa
 tem README.md 'Full (strict)' "README: modo SSL/TLS Full (strict)"
 tem README.md 'loki_dados_bytes' "README: disco do Loki publicado pelo node exporter"
 tem docker-compose.yml '--collector.textfile.directory=/textfile' "node exporter lê o textfile do disco do Loki"
+# Dependabot: um PR mensal com as imagens da borda.
+D=.github/dependabot.yml
+tem $D 'package-ecosystem: docker-compose' "Dependabot: ecossistema docker-compose"
+tem $D 'directory: /exemplos/whoami' "Dependabot: cobre o compose do exemplo whoami"
+tem $D 'directory: /' "Dependabot: cobre o compose principal"
+tem $D 'interval: monthly' "Dependabot: agenda mensal"
+tem $D 'default-days: 14' "Dependabot: cooldown de 14 dias"
+tem $D 'dependency-name: busybox' "Dependabot: regra do BusyBox"
+tem $D 'version-update:semver-minor' "Dependabot: BusyBox sem salto de linha (semver-minor ignorado)"
+nao_tem $D 'open-pull-requests-limit: 0' "Dependabot: limite de PRs acima de 0"
+nao_tem $D 'automerge' "Dependabot: sem auto-merge"
+for f in docker-compose.yml exemplos/whoami/docker-compose.yml; do
+  d=/${f%docker-compose.yml}; d=${d%/}; [ -z "$d" ] && d=/
+  tem $D "directory: $d" "Dependabot cobre o diretório de $f"
+done
+nao_tem .github/workflows 'auto-merge' "sem workflow de auto-merge"
+tem README.md 'Insights → Dependency graph → Dependabot' "README: onde conferir a leitura do Dependabot"
+tem README.md 'PR do Dependabot' "README: roteiro de revisão do PR do Dependabot"
+tem README.md 'chega também no `homelab-monitoring`' "README: PR do Loki chega nos dois repositórios"
+tem README.md 'aprovados juntos' "README: os dois PRs do Loki são aprovados juntos"
 exit $((falhas > 0))

@@ -1,0 +1,47 @@
+# Atualização das imagens Docker da borda: um PR por mês, só para revisão.
+# Nada é mesclado sozinho (não há workflow nem regra de auto-merge): o dono
+# lê as notas, roda testes/smoke.sh e aprova; na VPS, git pull + up -d.
+# Este arquivo só é validado pelo GitHub: confira em
+# Insights → Dependency graph → Dependabot depois de cada mudança.
+version: 2
+updates:
+  # docker-compose.yml da raiz: Traefik, socket-proxy, node exporter,
+  # BusyBox, Loki e Alloy.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: monthly
+    # Acima de 0 de propósito (nos sites é 0): aqui queremos os PRs.
+    open-pull-requests-limit: 5
+    # Só versões publicadas há pelo menos 14 dias. Para docker-compose só
+    # existe default-days (semver-*-days não vale para esse ecossistema).
+    cooldown:
+      default-days: 14
+    # Um PR só com tudo que mudou.
+    groups:
+      imagens-borda:
+        patterns:
+          - "*"
+    ignore:
+      # BusyBox: as versões X.Y.0 são instáveis. O ignore.versions usa a
+      # sintaxe do Bundler e não aceita curinga (não dá para escrever
+      # "*.*.0"), então ignoramos os saltos de linha (semver-minor): só
+      # entram patches da linha atual (1.36.1 -> 1.36.2). Subir de linha
+      # (ex. 1.36 -> 1.37) é à mão, escolhendo um X.Y.1 ou posterior, e
+      # sempre com o sufixo -musl (o Dependabot já preserva o sufixo).
+      - dependency-name: busybox
+        update-types:
+          - "version-update:semver-minor"
+
+  # Exemplo whoami (o smoke test lê a imagem daqui).
+  - package-ecosystem: docker-compose
+    directory: /exemplos/whoami
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 14
+    groups:
+      imagens-exemplo:
+        patterns:
+          - "*"
