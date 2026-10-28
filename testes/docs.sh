@@ -191,19 +191,27 @@ acesso="$tmp/README-acesso-vps"
 secao_readme "Acesso à VPS (ssh vps)" > "$acesso"
 tem README.md '`ssh vps`' "README: ponteiro para o apelido ssh vps"
 tem README.md '(#acesso-à-vps-ssh-vps)' "README: ponteiro aponta o bloco Host vps"
-topo=$(head -n 12 README.md)
-case $topo in *'ssh vps'*) echo "ok    README: ponteiro ssh vps perto do topo" ;; *) echo "FALHA README: ponteiro ssh vps deve ficar nas primeiras 12 linhas"; falhas=$((falhas + 1)) ;; esac
+topo="$tmp/README-topo"
+head -n 12 README.md > "$topo"
+tem "$topo" 'ssh vps' "README: ponteiro ssh vps perto do topo (primeiras 12 linhas)"
 tem "$acesso" 'Host vps' "acesso: bloco Host vps"
 tem_re "$acesso" '^ +HostName IP_DA_VPS$' "acesso: HostName com o placeholder IP_DA_VPS"
 tem_re "$acesso" '^ +User root$' "acesso: User root"
 tem_re "$acesso" '^ +IdentityFile ~/\.ssh/id_ed25519$' "acesso: IdentityFile da chave"
 tem_re "$acesso" '^ +IdentitiesOnly yes$' "acesso: IdentitiesOnly"
 tem_re "$acesso" '^ +PasswordAuthentication no$' "acesso: só chave, sem senha"
-tem_re "$acesso" '^ +StrictHostKeyChecking (yes|accept-new)$' "acesso: confere a chave do servidor"
+tem_re "$acesso" '^ +StrictHostKeyChecking accept-new$' "acesso: confere a chave do servidor"
 tem "$acesso" 'só leitura' "acesso: regra de só leitura para o agente"
-tem "$acesso" 'o dono' "acesso: mudanças na VPS são rodadas pelo dono"
-# Exemplos de acesso pelo PC: sem usuario@IP_DA_VPS (o túnel de métricas, metricas@IP_DA_VPS, fica de fora).
-nao_tem README.md 'usuario@IP_DA_VPS' "README: acesso pelo PC sem IP direto (usuario@IP_DA_VPS)"
+tem "$acesso" 'rodada pelo dono' "acesso: mudanças na VPS são rodadas pelo dono"
+# Nenhum exemplo de comando usa o IP direto: falha com qualquer @IP_DA_VPS ou ssh ... IP_DA_VPS,
+# exceto o túnel de métricas (metricas@IP_DA_VPS) e a linha `HostName IP_DA_VPS` do bloco.
+ip_direto=$(grep -nE '@IP_DA_VPS|ssh .*IP_DA_VPS' README.md | grep -vF 'metricas@IP_DA_VPS' | grep -vE 'HostName IP_DA_VPS' || true)
+if [ -z "$ip_direto" ]; then
+  echo "ok    README: nenhum exemplo de acesso usa o IP direto"
+else
+  echo "FALHA README: exemplo com IP direto (fora o túnel metricas@IP_DA_VPS): $ip_direto"
+  falhas=$((falhas + 1))
+fi
 tem README.md 'ssh -N -L 8080:127.0.0.1:8080 -L 8082:127.0.0.1:8082 -L 9100:127.0.0.1:9100 -L 3100:127.0.0.1:3100 vps' "README: túnel do painel usa ssh vps"
 tem README.md 'metricas@IP_DA_VPS' "README: túnel de métricas mantém metricas@IP_DA_VPS"
 exit $((falhas > 0))

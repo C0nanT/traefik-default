@@ -39,7 +39,7 @@ Host vps
 `StrictHostKeyChecking accept-new` grava a chave do servidor no primeiro
 acesso e recusa a conexão se ela mudar depois. Teste com `ssh vps true`.
 
-O agente roda na VPS só comandos de só leitura (`docker compose ps`,
+O agente usa a VPS em modo só leitura, com comandos como (`docker compose ps`,
 `docker compose logs`, `cat`, `ls`). Qualquer mudança lá (`up -d`,
 `git pull`, `install`, editar arquivo) é rodada pelo dono.
 
