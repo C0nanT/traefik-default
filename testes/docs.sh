@@ -29,6 +29,10 @@ tem_re() { # arquivo regex-estendida descrição
     falhas=$((falhas + 1))
   fi
 }
+# secao_readme "título" [fora]: imprime a seção "## título" do README (com "fora", o README sem ela).
+secao_readme() {
+  awk -v t="## $1" -v fora="${2:-}" '/^## /{on=($0 == t)} (fora == "") ? on : !on' README.md
+}
 G=docs/como-plugar-um-projeto.md
 for n in web websecure proxy le-dns le-http 'seguranca@file' 'compressao@file' 'www-para-raiz@file'; do
   tem $G "$n" "guia lista $n"
@@ -93,7 +97,7 @@ tem README.md 'https://www.cloudflare.com/ips-v4' "README: de onde vêm as faixa
 tem README.md 'Full (strict)' "README: modo SSL/TLS Full (strict)"
 tem README.md 'loki_dados_bytes' "README: disco do Loki publicado pelo node exporter"
 tem docker-compose.yml '--collector.textfile.directory=/textfile' "node exporter lê o textfile do disco do Loki"
-# Dependabot: um PR mensal com as imagens da borda e outro com as actions.
+# Dependabot: um PR mensal com as imagens da borda.
 D=.github/dependabot.yml
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
@@ -103,7 +107,6 @@ bloco() { # ecossistema -> arquivo com só aquela entrada
   echo "$tmp/$1"
 }
 DC=$(bloco docker-compose)
-DA=$(bloco github-actions)
 tem_re $D '^  - package-ecosystem: docker-compose$' "Dependabot: ecossistema docker-compose"
 tem_re $DC '^    directories:$' "Dependabot: docker-compose numa entrada só, com lista de diretórios (um PR por mês)"
 tem_re $DC '^      - "/"$' "Dependabot: diretório / (compose principal)"
@@ -112,111 +115,73 @@ nao_tem $DC '    directory:' "Dependabot: docker-compose sem entrada separada po
 n=$(grep -cE '^  - package-ecosystem: docker-compose$' $D)
 if [ "$n" = 1 ]; then echo "ok    Dependabot: uma única entrada de docker-compose"; else echo "FALHA Dependabot: esperada 1 entrada de docker-compose, há $n"; falhas=$((falhas + 1)); fi
 n=$(grep -cE '^  - package-ecosystem:' $D)
-if [ "$n" = 2 ]; then echo "ok    Dependabot: duas entradas (imagens e actions)"; else echo "FALHA Dependabot: esperadas 2 entradas de update, há $n"; falhas=$((falhas + 1)); fi
+if [ "$n" = 1 ]; then echo "ok    Dependabot: só a entrada das imagens (sem github-actions)"; else echo "FALHA Dependabot: esperada 1 entrada de update, há $n"; falhas=$((falhas + 1)); fi
+nao_tem $D 'github-actions' "Dependabot: sem ecossistema github-actions"
 tem $DC 'interval: monthly' "Dependabot: imagens com agenda mensal"
 tem $DC 'default-days: 14' "Dependabot: imagens com cooldown de 14 dias"
 tem $DC 'dependency-name: busybox' "Dependabot: regra do BusyBox"
 tem $DC 'version-update:semver-minor' "Dependabot: BusyBox sem salto de linha (semver-minor ignorado)"
 nao_tem $D 'open-pull-requests-limit: 0' "Dependabot: limite de PRs acima de 0"
-tem_re $D '^  - package-ecosystem: github-actions$' "Dependabot: ecossistema github-actions"
-tem $DA 'directory: "/"' "Dependabot: actions lidas de / (.github/workflows)"
-tem $DA 'interval: monthly' "Dependabot: actions com agenda mensal"
-tem $DA 'default-days: 14' "Dependabot: actions com cooldown de 14 dias"
-tem_re $DA '^    groups:$' "Dependabot: actions num grupo só (um PR por mês)"
-tem_re $DA '^          - "\*"$' "Dependabot: grupo das actions pega todas"
-# Nenhum workflow de auto-merge: nada que mescle ou aprove PR sozinho.
-# Qualquer workflow é permitido, desde que não faça isso.
-for f in .github/workflows/*; do
-  [ -e "$f" ] || continue
-  for p in 'gh pr merge' 'gh pr review' '--approve' '--auto' 'pull_request_target' \
-    'dependabot/fetch-metadata' 'auto-merge' 'automerge' 'enablePullRequestAutoMerge' \
-    'merge_method' '/merge' 'pulls.createReview' 'pulls.merge'; do
-    nao_tem "$f" "$p" "sem auto-merge: $f não tem '$p'"
-  done
-done
-# Workflow de deploy da borda: só pelo botão, só da main, no Environment
-# producao, ssh do runner com o host conferido e curl nos dois domínios.
-W=.github/workflows/deploy-borda.yml
-tem_re $W '^name: Deploy da borda$' "workflow de deploy da borda existe ($W)"
-tem_re $W '^  workflow_dispatch:' "workflow: disparo manual (workflow_dispatch)"
-n=$(awk '/^on:/{on=1; next} /^[^ #]/{on=0} on && /^  [a-z_]+:/' $W 2>/dev/null | wc -l)
-if [ "$n" = 1 ]; then echo "ok    workflow: único gatilho é o manual"; else echo "FALHA workflow: esperado só o gatilho workflow_dispatch, há $n"; falhas=$((falhas + 1)); fi
-nao_tem $W 'push:' "workflow: sem gatilho de push"
-nao_tem $W 'pull_request' "workflow: sem gatilho de PR"
-nao_tem $W 'schedule:' "workflow: sem gatilho agendado"
-tem $W "github.ref != 'refs/heads/main'" "workflow: recusa rodar fora da main"
-tem_re $W '^    environment: producao$' "workflow: usa o Environment producao"
-tem_re $W '^permissions: \{\}$' "workflow: sem permissões do GITHUB_TOKEN"
-for s in VPS_HOST VPS_SSH_KEY VPS_KNOWN_HOSTS; do
-  tem $W "secrets.$s" "workflow: usa o secret $s"
-done
-tem $W 'deploy@' "workflow: entra como o usuário deploy"
-tem $W 'StrictHostKeyChecking=yes' "workflow: confere a impressão digital da VPS"
-tem $W 'UserKnownHostsFile=' "workflow: known_hosts do secret, em arquivo"
-tem $W 'IdentitiesOnly=yes' "workflow: usa só a chave do secret"
-tem $W 'mktemp' "workflow: chave e known_hosts em arquivos temporários"
-nao_tem $W 'actions/checkout' "workflow: sem checkout"
-nao_tem $W 'uses:' "workflow: sem action nenhuma (nem de terceiros para SSH)"
-tem $W 'https://conantorres.dev/' "workflow: curl no conantorres.dev"
-tem $W 'https://bbcontainermodular.com/' "workflow: curl no bbcontainer"
-tem $W '2[0-9][0-9])' "workflow: curl exige resposta 2xx"
-nao_tem $W ' -L' "workflow: curl não segue redirecionamento (-L)"
-nao_tem $W '--location' "workflow: curl não segue redirecionamento (--location)"
+# Sem deploy pelo CI: a borda não tem workflow nenhum (o deploy é só o cron).
+if [ -n "$(ls .github/workflows 2>/dev/null)" ]; then echo "FALHA .github/workflows não deve ter arquivos (deploy só pelo cron)"; falhas=$((falhas + 1)); else echo "ok    .github/workflows vazio"; fi
 tem README.md 'Insights → Dependency graph → Dependabot' "README: onde conferir a leitura do Dependabot"
 tem README.md 'Atualização das imagens (Dependabot)' "README: item do Dependabot no checklist manual"
 tem_re README.md 'Dependency graph → Dependabot que o GitHub leu' "README: checklist manual manda conferir o Dependency graph depois do merge"
 tem README.md 'PR do Dependabot' "README: roteiro de revisão do PR do Dependabot"
 tem README.md 'IMAGEM_LOKI' "README: aprovar PR do Loki atualiza o Loki falso do homelab (smoke.env)"
 tem README.md 'Loki da borda:' "README: aprovar PR do Loki atualiza a nota de versão do homelab"
-# Deploy pelo CI: usuário deploy, sudoers, chaves e Environment (ticket 04).
-tem README.md '## Deploy pelo CI (usuário `deploy`)' "README: seção do usuário deploy"
-tem README.md 'install -m 755 -o root -g root /opt/traefik/vps/deploy-vps.sh /usr/local/sbin/deploy-vps' "README: instala o deploy-vps como root"
-tem README.md '--shell /bin/sh deploy' "README: deploy com shell real (/bin/sh)"
-nao_tem README.md 'usermod -aG docker deploy' "README: deploy fora do grupo docker"
-tem README.md 'Defaults!/usr/local/sbin/deploy-vps env_keep += "SSH_ORIGINAL_COMMAND"' "README: sudoers mantém só SSH_ORIGINAL_COMMAND"
-tem README.md 'deploy ALL=(root) NOPASSWD: /usr/local/sbin/deploy-vps conan-torres, /usr/local/sbin/deploy-vps traefik' "README: sudoers libera só o script com os dois argumentos"
-tem README.md 'visudo -cf' "README: valida o sudoers com visudo -cf"
-tem README.md 'restrict,command="sudo /usr/local/sbin/deploy-vps conan-torres"' "README: chave do conan-torres presa ao projeto"
-tem README.md 'restrict,command="sudo /usr/local/sbin/deploy-vps traefik"' "README: chave do traefik-default presa à borda"
-tem README.md 'ssh-keygen -t ed25519' "README: uma chave ed25519 por repositório"
-tem README.md 'ssh-keyscan' "README: known_hosts pelo ssh-keyscan"
-tem README.md 'ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub' "README: impressão digital conferida na VPS"
-tem README.md 'Environment `producao`' "README: Environment producao"
-tem README.md 'Selected branches and tags' "README: Environment limitado por regra de branch"
-for s in VPS_HOST VPS_SSH_KEY VPS_KNOWN_HOSTS; do
-  tem README.md "$s" "README: secret $s"
+# Restos do deploy por SSH (descartado em 2026-10-28): nenhuma referência fora
+# de .scratch (histórico) e deste arquivo.
+# O README só pode citá-los no roteiro de limpeza ("Limpar o deploy por SSH").
+sem_limpeza="$tmp/README-sem-limpeza"
+secao_readme "Limpar o deploy por SSH" fora > "$sem_limpeza"
+for padrao in deploy-vps .deploy-pelo-ci; do
+  restos=$(grep -rIlF --exclude-dir=.git --exclude-dir=.scratch --exclude=docs.sh --exclude=README.md -- "$padrao" . 2>/dev/null)
+  grep -qF -- "$padrao" "$sem_limpeza" && restos="$restos README.md"
+  if [ -z "$restos" ]; then echo "ok    nenhuma referência a $padrao"; else echo "FALHA referência a $padrao em: $restos"; falhas=$((falhas + 1)); fi
 done
-tem README.md '--env producao' "README: secrets do Environment, não do repositório"
-tem README.md 'docker login ghcr.io` do root' "README: deploy-vps usa o docker login do root"
-tem README.md '.github/workflows/deploy-borda.yml' "README: aponta o workflow de deploy da borda"
-tem README.md 'Run workflow' "README: deploy da borda pelo botão Run workflow"
-tem README.md 'github-actions' "README: Dependabot também vigia as actions"
-# Guia (ticket 07): CI por SSH para os sites com marcador; cron para os demais.
-tem $G '.deploy-pelo-ci' "guia: CI por SSH para sites com .deploy-pelo-ci"
-tem $G 'Pelo cron (os demais sites)' "guia: cron como caminho dos demais sites"
-tem $G 'Deploy pelo CI (usuário `deploy`)' "guia aponta a seção do README"
-nao_tem $G 'GitHub Actions por SSH (evolução)' "guia: CI por SSH deixa de ser evolução"
-# Checklist do primeiro deploy na ordem segura da SPEC (instalar → secrets → marcador → job).
-tem README.md '### Checklist do primeiro deploy' "README: checklist do primeiro deploy"
-ordem() { # arquivo antes depois descrição
-  local a b
-  a=$(grep -nF -- "$2" "$1" | head -1 | cut -d: -f1)
-  b=$(grep -nF -- "$3" "$1" | head -1 | cut -d: -f1)
-  if [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]; then
-    echo "ok    $4"
-  else
-    echo "FALHA $4 ($2 deveria vir antes de $3)"
-    falhas=$((falhas + 1))
-  fi
-}
-ordem README.md '**1. Instalar na VPS**' '**2. Environments e secrets**' "checklist: instalar na VPS antes dos secrets"
-ordem README.md '**2. Environments e secrets**' '**3. Marcador da pasta do site**' "checklist: secrets antes do marcador"
-ordem README.md '**3. Marcador da pasta do site**' '**4. Mesclar o job do conan-torres**' "checklist: marcador antes do job"
-ordem README.md '**4. Mesclar o job do conan-torres**' '**5. Primeiro deploy**' "checklist: job antes do primeiro deploy"
-ordem README.md '**5. Primeiro deploy**' '**6. Falha forçada e e-mail**' "checklist: falha forçada por último"
-tem README.md 'sudo touch /opt/apps/conan-torres/.deploy-pelo-ci' "checklist: marcador da pasta do conan-torres"
-tem README.md 'linhas novas de `conan-torres`' "checklist: cron deixa o conan-torres de fora"
-tem README.md 'ERRO: SHA inválido' "checklist: chave de outro repositório recusada"
-tem README.md 'Only notify for failed workflows' "checklist: e-mail só para execução que falha"
-tem README.md 'IMAGE_TAG=<sha>' "checklist: falha forçada com IMAGE_TAG"
+nao_tem README.md '## Deploy pelo CI' "README: sem a seção Deploy pelo CI"
+nao_tem README.md 'Checklist do primeiro deploy' "README: sem o checklist do primeiro deploy"
+nao_tem $G 'Pelo CI' "guia: sem deploy pelo CI"
+tem $G '**Pelo cron.**' "guia: cron como caminho de deploy"
+tem $G '**Manual' "guia: deploy manual"
+# Roteiro para o dono limpar a VPS e o GitHub.
+tem README.md '## Limpar o deploy por SSH' "README: seção do roteiro de limpeza"
+tem README.md 'sudo rm /etc/sudoers.d/deploy' "limpeza: remove o sudoers do deploy"
+tem README.md 'sudo visudo -c' "limpeza: valida o sudoers com visudo -c"
+tem README.md 'sudo deluser --remove-home deploy' "limpeza: remove o usuário deploy"
+tem README.md 'sudo rm /usr/local/sbin/' "limpeza: apaga o script instalado"
+tem README.md 'sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh' "limpeza: reinstala o script do cron"
+tem README.md 'gh api -X DELETE repos/C0nanT/traefik-default/environments/producao' "limpeza: apaga o Environment producao da borda"
+tem README.md 'gh api -X DELETE repos/C0nanT/conantorres.dev/environments/producao' "limpeza: apaga o Environment producao do site"
+# Log do cron no Loki (ticket 03).
+tem alloy/config.alloy 'loki.source.file "atualizar_apps"' "Alloy lê o log do cron (loki.source.file)"
+tem_re alloy/config.alloy 'job +=  *"atualizar-apps"' "Alloy rotula o log do cron com job=atualizar-apps"
+tem docker-compose.yml '${LOG_CRON_DIR:-/var/log/atualizar-apps}:/log-host:ro' "compose monta só a pasta dedicada do log do cron, só leitura"
+nao_tem docker-compose.yml '${LOG_CRON_DIR:-/var/log}:' "compose não monta /var/log inteiro"
+tem vps/atualizar-apps.logrotate '/var/log/atualizar-apps/atualizar-apps.log {' "logrotate: caminho na pasta dedicada"
+tem vps/atualizar-apps.logrotate 'delaycompress' "logrotate: delaycompress (o Alloy termina o arquivo rotacionado)"
+tem vps/atualizar-apps.sh 'mkdir -p' "script cria a pasta do log se faltar"
+tem README.md 'sudo install -d -m 755 /var/log/atualizar-apps' "README: migração única cria a pasta do log"
+tem README.md 'sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron' "README: migração reinstala o cron.d"
+tem vps/atualizar-apps.logrotate 'create 0644 root root' "logrotate recria o log legível pelo Alloy"
+tem README.md '{job="atualizar-apps"}' "README: consulta LogQL do log do cron"
+tem testes/verificacoes/08-log-cron.sh 'job=atualizar-apps' "smoke confere a linha do cron no Loki com o rótulo"
+# Checklist manual da falha forçada: os passos ficam só nessa seção.
+falha_forcada="$tmp/README-falha-forcada"
+secao_readme "Checklist manual da falha forçada" > "$falha_forcada"
+tem "$falha_forcada" 'cd /opt/traefik && git pull' "checklist da falha: git pull em /opt/traefik"
+tem "$falha_forcada" 'sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh /usr/local/bin/atualizar-apps.sh' "checklist da falha: reinstala o script do cron"
+tem "$falha_forcada" 'sudo install -m 644 /opt/traefik/vps/atualizar-apps.logrotate /etc/logrotate.d/atualizar-apps' "checklist da falha: reinstala o logrotate do cron"
+tem "$falha_forcada" 'docker compose up -d' "checklist da falha: sobe a borda para o Alloy pegar o volume"
+tem "$falha_forcada" 'docker compose ps alloy' "checklist da falha: confere o Alloy"
+tem "$falha_forcada" 'deploy_falhou' "checklist da falha: série deploy_falhou"
+tem "$falha_forcada" 'deploy_rodada_timestamp_seconds' "checklist da falha: série da hora da rodada"
+tem "$falha_forcada" 'Deploy (cron)' "checklist da falha: linha Deploy (cron) do painel"
+tem "$falha_forcada" 'IMAGE_TAG=tag-que-nao-existe' "checklist da falha: força a falha com IMAGE_TAG inválida"
+tem "$falha_forcada" 'Deploy falhou (VPS)' "checklist da falha: alerta de falha no Telegram"
+tem "$falha_forcada" 'Cron de deploy parado' "checklist da falha: alerta de cron parado (opcional)"
+tem "$falha_forcada" 'sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron /etc/cron.d/atualizar-apps' "checklist da falha: religa o cron"
+tem "$falha_forcada" 'resolvido' "checklist da falha: confere o alerta resolvido"
+tem README.md '[Checklist da falha forçada](#checklist-manual-da-falha-forçada)' "README: índice aponta o checklist da falha forçada"
 exit $((falhas > 0))

@@ -115,6 +115,28 @@ loki.process "linhas" {
   }
 }
 
+// 4b. Log do cron de atualização dos sites (vps/atualizar-apps.sh), um
+//     arquivo no host, montado SÓ LEITURA em /log-host (a pasta dedicada
+//     /var/log/atualizar-apps, não /var/log inteiro, e a pasta, não o
+//     arquivo: o logrotate renomeia o arquivo e cria outro, e um bind de
+//     arquivo único ficaria preso ao antigo). O loki.source.file segue o
+//     caminho: ao rotacionar, larga o arquivo renomeado e lê o novo. A
+//     posição fica no --storage.path. Rótulos: job (fixo) e filename (o
+//     caminho do arquivo, que o loki.source.file acrescenta sozinho; poucos
+//     valores, sem cardinalidade nova); vai direto ao Loki, sem os estágios dos containers.
+local.file_match "atualizar_apps" {
+  path_targets = [{
+    __path__ = "/log-host/atualizar-apps.log",
+    job      = "atualizar-apps",
+  }]
+  sync_period = "15s"
+}
+
+loki.source.file "atualizar_apps" {
+  targets    = local.file_match.atualizar_apps.targets
+  forward_to = [loki.write.loki.receiver]
+}
+
 // 5. Envio ao Loki da borda, pela rede interna "logs" (fora da rede "proxy").
 loki.write "loki" {
   endpoint {

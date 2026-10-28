@@ -1,7 +1,12 @@
-/var/log/atualizar-apps.log {
+/var/log/atualizar-apps/atualizar-apps.log {
   weekly
   rotate 4
   compress
+  # Comprime só na rotação seguinte: o Alloy ainda pode estar terminando de ler o arquivo recém-renomeado.
+  delaycompress
   missingok
   notifempty
+  # Renomeia e cria o arquivo novo legível (o padrão seria 0640 root:adm, e o
+  # Alloy, que roda sem root, não leria). O Alloy segue o novo pelo caminho.
+  create 0644 root root
 }

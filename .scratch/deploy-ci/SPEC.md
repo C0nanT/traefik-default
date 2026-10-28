@@ -1,3 +1,5 @@
+> **Substituída (2026-10-28):** o deploy por SSH foi descartado para não expor a porta 22 da VPS. Veja `.scratch/deploy-cron-grafana/SPEC.md`. Este documento fica só como histórico.
+
 # Deploy pelo CI via SSH (traefik-default e conantorres.dev)
 
 Status: ready-for-agent

@@ -309,6 +309,13 @@ services:
     volumes:
       - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
       - alloy-dados:/var/lib/alloy/data
+      # Log do cron (/var/log/atualizar-apps/atualizar-apps.log), só leitura.
+      # Monta a PASTA dedicada do cron (não /var/log inteiro, que tem auth.log
+      # etc.), e não o arquivo: o logrotate renomeia o arquivo e cria outro, e
+      # um bind de arquivo único seguiria o antigo (e, sem o arquivo, o Docker
+      # criaria uma pasta no lugar). O Alloy só abre o arquivo citado em
+      # alloy/config.alloy. O smoke troca a pasta por uma temporária.
+      - ${LOG_CRON_DIR:-/var/log/atualizar-apps}:/log-host:ro
       # Repare: o socket do Docker NÃO é montado aqui.
     networks:
       - socket   # API do Docker, pelo socket-proxy (só leitura)

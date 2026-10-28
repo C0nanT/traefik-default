@@ -71,3 +71,26 @@ afirmar "o disco-loki não tem rede (network_mode: none)" \
   test "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$ID_DISCO" 2>/dev/null)" = none
 afirmar "o disco-loki monta os dados do Loki só para leitura" \
   test "$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/loki"}}{{.RW}}{{end}}{{end}}' "$ID_DISCO" 2>/dev/null)" = false
+
+secao "Node exporter: deploy do cron (textfile)"
+
+# O cron (vps/atualizar-apps.sh) roda no host e grava deploy.prom no volume
+# "textfile". Aqui o disco-loki (que monta o volume com escrita) faz o papel
+# do cron: grava, num arquivo à parte, o mesmo formato do script, e o node
+# exporter tem de publicar a série. O arquivo é removido no fim.
+PROM_DEPLOY_TESTE=/textfile/deploy-smoke.prom
+docker exec "$ID_DISCO" sh -c "printf '%s\n' \
+  'deploy_falhou{app=\"smoke-ok\"} 0' \
+  'deploy_falhou{app=\"smoke-falhou\"} 1' \
+  'deploy_rodada_timestamp_seconds 1700000000' \
+  >$PROM_DEPLOY_TESTE.tmp && mv $PROM_DEPLOY_TESTE.tmp $PROM_DEPLOY_TESTE" >/dev/null 2>&1
+deploy_publicado() {
+  local corpo
+  corpo="$(curl -s --max-time 5 "$URL_NODE_LOCAL" 2>/dev/null)"
+  [[ "$corpo" == *'deploy_falhou{app="smoke-falhou"} 1'* ]] &&
+    [[ "$corpo" == *'deploy_falhou{app="smoke-ok"} 0'* ]] &&
+    [[ "$corpo" == *deploy_rodada_timestamp_seconds* ]]
+}
+esperar_ate 15 deploy_publicado
+afirmar "publica deploy_falhou por site e deploy_rodada_timestamp_seconds" deploy_publicado
+docker exec "$ID_DISCO" rm -f "$PROM_DEPLOY_TESTE" >/dev/null 2>&1

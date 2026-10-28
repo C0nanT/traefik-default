@@ -11,7 +11,7 @@ simples para plugar sites. Cada site vive no próprio repositório e entra pelo
 [Plugar um site](docs/como-plugar-um-projeto.md) ·
 [Painel e métricas](#painel-e-métricas-via-túnel-ssh) ·
 [Logs](#logs-loki-e-alloy) ·
-[Deploy pelo CI](#deploy-pelo-ci-usuário-deploy) ·
+[Checklist da falha forçada](#checklist-manual-da-falha-forçada) ·
 [Certificados](#certificados-lets-encrypt) ·
 [Próximos passos](#próximos-passos)
 
@@ -60,9 +60,8 @@ Faça uma vez por servidor (Debian/Ubuntu; ajuste ao seu sistema).
    `vps/atualizar-apps.sh` roda `docker compose pull && up -d` em cada
    `/opt/apps/*/` (só recria o que mudou) e limpa imagens antigas. Push na
    `main` de um site → no ar em até ~10 min depois do CI. Log só de mudanças
-   e erros em `/var/log/atualizar-apps.log`, com rotação semanal. Pasta que
-   tiver o arquivo-marcador `.deploy-pelo-ci` é pulada pelo cron (quem
-   atualiza é o deploy pelo CI):
+   e erros em `/var/log/atualizar-apps/atualizar-apps.log` (pasta só do cron,
+   criada pelo script se faltar), com rotação semanal:
    ```bash
    sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh /usr/local/bin/atualizar-apps.sh
    sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron /etc/cron.d/atualizar-apps
@@ -71,6 +70,18 @@ Faça uma vez por servidor (Debian/Ubuntu; ajuste ao seu sistema).
    Rode como `root` (o cron usa o `docker login ghcr.io` de `/root`). Para
    atualizar na hora, sem esperar: `cd /opt/apps/<projeto> && docker compose
    pull && docker compose up -d`.
+
+   **Métrica do cron.** A cada rodada o script grava `deploy.prom` no volume
+   `textfile` da borda (`traefik_textfile`, achado pelo Docker; é o mesmo do
+   `loki_dados_bytes`), e o node exporter publica:
+   - `deploy_falhou{app="<pasta>"}`: 1 se o `pull` ou o `up` daquele site
+     falhou na rodada, 0 se deu certo;
+   - `deploy_rodada_timestamp_seconds`: horário Unix do fim da rodada.
+
+   A gravação é atômica. Se falhar, o log ganha uma linha `ERRO métrica: ...`
+   e o deploy segue igual. **A cópia em `/usr/local/bin` não se atualiza com
+   o `git pull`:** a cada mudança em `vps/atualizar-apps.sh`, reinstale com o
+   primeiro comando `install` acima.
 
 ## Subir a pilha
 
@@ -112,9 +123,7 @@ em execução e lê a do whoami do exemplo.
 
 O caminho normal é o **PR do Dependabot**: uma vez por mês ele abre um PR
 com as imagens que tiveram versão nova, só com versões publicadas há pelo
-menos 14 dias (config em `.github/dependabot.yml`). Um segundo PR mensal,
-com a mesma espera, atualiza as actions de `.github/workflows`
-(ecossistema `github-actions`). Duas regras do BusyBox:
+menos 14 dias (config em `.github/dependabot.yml`). Duas regras do BusyBox:
 o Dependabot mantém o sufixo `-musl` e, como o `ignore` não aceita curinga
 para barrar as versões `X.Y.0` (instáveis), só propõe patches da linha
 atual; subir de linha (1.36 para 1.37) é à mão, com um `X.Y.1` ou
@@ -123,10 +132,8 @@ posterior. Para revisar e aplicar o PR do Dependabot:
 1. Leia as notas de versão que o PR mostra (e o "upgrade guide" do Loki).
 2. No seu computador, pegue a branch do PR e rode `testes/smoke.sh`.
 3. Aprove e mescle o PR (nada é mesclado sozinho).
-4. Aplique na VPS pelo botão de deploy (Actions → Deploy da borda → Run
-   workflow, veja "Deploy pelo CI" abaixo) ou à mão: `git pull` e
-   `docker compose up -d` (com `pull` antes, como no passo 3 do roteiro à
-   mão abaixo).
+4. Na VPS: `git pull` e `docker compose up -d` (com `pull` antes, como no
+   passo 3 do roteiro à mão abaixo).
 5. Depois do primeiro merge da configuração, confira se o GitHub a leu sem
    erro em
    Insights → Dependency graph → Dependabot.
@@ -271,6 +278,13 @@ linha e sai na consulta com `| json`):
 | `tipo` | `acesso`, `traefik` | só nas linhas do Traefik: JSON de acesso ou log próprio |
 | `router` | ex.: `conan-torres@docker` | só nas linhas de acesso, do campo `RouterName` |
 
+O log do cron (`/var/log/atualizar-apps/atualizar-apps.log`) não vem de
+container: o Alloy o lê do arquivo, montado só leitura (a pasta dedicada
+`/var/log/atualizar-apps`, não o `/var/log` todo, para sobreviver à rotação
+do logrotate), e o envia com `job="atualizar-apps"` e o `filename` que o
+próprio `loki.source.file` acrescenta, sem os rótulos de cima. No Grafana ou no `curl` abaixo: `{job="atualizar-apps"}`, ou
+`{job="atualizar-apps"} |= "ERRO"` para só os erros.
+
 O `router` vem do `RouterName` (os routers configurados, um conjunto
 fechado), **nunca** do `RequestHost`: o Host vem do cliente, e bots mandando
 qualquer Host criariam um stream novo por valor. Requisição que não casou
@@ -312,6 +326,10 @@ curl -s -G http://127.0.0.1:3100/loki/api/v1/query_range \
   --data-urlencode 'query={projeto="conan-torres", stream="stderr"}' \
   --data-urlencode 'since=1h' --data-urlencode 'limit=50' \
   | python3 -c 'import json,sys; [print(l) for r in json.load(sys.stdin)["data"]["result"] for _, l in r["values"]]'
+# Log do cron de atualização dos sites (últimas 24 horas)
+curl -s -G http://127.0.0.1:3100/loki/api/v1/query_range \
+  --data-urlencode 'query={job="atualizar-apps"}' \
+  --data-urlencode 'since=24h' --data-urlencode 'limit=50'
 # Respostas 5xx do log de acesso nas últimas 6 horas
 curl -s -G http://127.0.0.1:3100/loki/api/v1/query_range \
   --data-urlencode 'query={tipo="acesso"} | json | DownstreamStatus >= 500' \
@@ -387,189 +405,112 @@ subir o túnel em container) está em "Túnel até a VPS" no README do
 [`homelab-monitoring`](../homelab-monitoring). Para revogar o acesso, apague
 a linha do `authorized_keys` (ou `sudo deluser --remove-home metricas`).
 
-## Deploy pelo CI (usuário `deploy`)
+## Limpar o deploy por SSH
 
-O GitHub Actions faz o deploy entrando na VPS por SSH com um usuário
-próprio, `deploy`. Ele não está no grupo `docker` e não tem terminal, túnel
-nem comando livre: cada chave só consegue rodar
-`sudo /usr/local/sbin/deploy-vps <projeto>`, com o projeto fixado na linha
-do `authorized_keys`. O único dado que vem do GitHub é o SHA do commit, e o
-script confere que são 40 caracteres hexadecimais antes de usar. Há uma
-chave por repositório: a do `conan-torres` só faz deploy do site, a do
-`traefik-default` só faz deploy da borda. Se uma chave vazar, dá para
-disparar o deploy daquele projeto (até a ponta da `main`) e nada mais.
+O deploy pelo CI via SSH foi descartado (2026-10-28): exigiria expor a porta
+22 da VPS à internet. O deploy é só o cron (`vps/atualizar-apps.sh`). Quem
+chegou a configurar o `deploy` precisa limpar a VPS e o GitHub, uma vez.
 
-O script roda como root pelo sudo, então o `docker compose pull` usa o
-`docker login ghcr.io` do root, o mesmo do cron. Não precisa de login novo.
+Na VPS:
 
-Na VPS, uma vez:
-
-1. Instale o script como root (repita depois de cada mudança em
-   `vps/deploy-vps.sh`; o deploy da borda atualiza `/opt/traefik`, mas não
-   reinstala o script):
+1. Remova o sudoers do `deploy` e valide (um sudoers quebrado trava o sudo de
+   todo mundo):
    ```bash
-   sudo install -m 755 -o root -g root /opt/traefik/vps/deploy-vps.sh /usr/local/sbin/deploy-vps
+   sudo rm /etc/sudoers.d/deploy-vps
+   sudo visudo -c   # deve terminar com "parsed OK" em todos os arquivos
    ```
-2. Crie o usuário, sem senha e **fora** do grupo `docker`:
+2. Remova o usuário (apaga junto a pasta dele e o `authorized_keys`) e o
+   script instalado:
    ```bash
-   sudo adduser --disabled-password --gecos "" --shell /bin/sh deploy
-   id deploy   # só o grupo deploy; nada de docker nem sudo
+   sudo deluser --remove-home deploy
+   sudo rm /usr/local/sbin/deploy-vps
    ```
-   O shell precisa ser real (`/bin/sh`): o `sshd` roda o comando forçado
-   pelo shell do usuário, e com `nologin` nada roda. Quem restringe é o
-   `restrict` + `command=` do passo 4, não o shell.
-3. Libere no sudoers só o script, só com os dois argumentos permitidos. O
-   `env_reset` padrão do sudo apaga o ambiente; o `env_keep` deixa passar só
-   o `SSH_ORIGINAL_COMMAND`, onde chega o SHA. Valide antes de instalar (um
-   sudoers quebrado trava o sudo de todo mundo):
+3. Reinstale o script do cron a partir do `/opt/traefik` atualizado (a cópia
+   instalada não se atualiza com o `git pull`):
    ```bash
-   cat > /tmp/deploy-vps.sudoers <<'FIM'
-   Defaults!/usr/local/sbin/deploy-vps env_keep += "SSH_ORIGINAL_COMMAND"
-   deploy ALL=(root) NOPASSWD: /usr/local/sbin/deploy-vps conan-torres, /usr/local/sbin/deploy-vps traefik
-   FIM
-   sudo visudo -cf /tmp/deploy-vps.sudoers \
-     && sudo install -m 440 -o root -g root /tmp/deploy-vps.sudoers /etc/sudoers.d/deploy-vps
-   rm /tmp/deploy-vps.sudoers
-   sudo -l -U deploy   # deve listar só as duas linhas do deploy-vps
+   cd /opt/traefik && git pull --ff-only
+   sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh /usr/local/bin/atualizar-apps.sh
    ```
-4. Gere **no seu PC** uma chave ed25519 por repositório, sem senha (o
-   Actions não tem como digitar), fora de qualquer repositório:
+
+No GitHub, apague o Environment `producao` dos dois repositórios (isso apaga
+junto os secrets `VPS_HOST`, `VPS_SSH_KEY` e `VPS_KNOWN_HOSTS`):
+
+```bash
+gh api -X DELETE repos/C0nanT/traefik-default/environments/producao
+gh api -X DELETE repos/C0nanT/conantorres.dev/environments/producao
+```
+
+No PC, se ainda existirem, apague as chaves
+`~/.ssh/deploy-conan-torres` e `~/.ssh/deploy-traefik-default`.
+
+## Checklist manual da falha forçada
+
+Confirma o caminho inteiro do aviso de deploy: cron na VPS → métrica → painel
+Logs → Telegram. Não é automatizado. Faça depois de publicar esta versão e
+sempre que mexer no cron ou nos alertas de deploy. Os passos 1 a 3 são na
+VPS; os de conferir no painel são no PC (o Grafana fica no
+[`homelab-monitoring`](../homelab-monitoring)).
+
+1. **Atualize o repositório da borda:**
    ```bash
-   ssh-keygen -t ed25519 -N "" -C deploy@conan-torres -f ~/.ssh/deploy-conan-torres
-   ssh-keygen -t ed25519 -N "" -C deploy@traefik-default -f ~/.ssh/deploy-traefik-default
+   cd /opt/traefik && git pull
    ```
-   A parte privada vai **só** para o secret do GitHub (passo 6); nunca para
-   um commit. Na VPS entram as públicas (`.pub`), uma por linha, cada uma com
-   o projeto fixado:
+2. **Reinstale o script, o cron e o logrotate.** A cópia instalada não se
+   atualiza com o `git pull`. **Migração única do log:** ele saiu de
+   `/var/log/atualizar-apps.log` para a pasta própria
+   `/var/log/atualizar-apps/` (o Alloy monta só ela, não o `/var/log` todo).
+   Crie a pasta e reinstale os três arquivos (o cron e o logrotate apontam
+   para o caminho novo); o log antigo pode ser removido:
    ```bash
-   sudo install -d -m 700 -o deploy -g deploy /home/deploy/.ssh
-   sudo tee /home/deploy/.ssh/authorized_keys >/dev/null <<'FIM'
-   restrict,command="sudo /usr/local/sbin/deploy-vps conan-torres" ssh-ed25519 AAAA...CHAVE_DO_CONAN_TORRES... deploy@conan-torres
-   restrict,command="sudo /usr/local/sbin/deploy-vps traefik" ssh-ed25519 AAAA...CHAVE_DO_TRAEFIK_DEFAULT... deploy@traefik-default
-   FIM
-   sudo chown deploy:deploy /home/deploy/.ssh/authorized_keys
-   sudo chmod 600 /home/deploy/.ssh/authorized_keys
+   sudo install -d -m 755 /var/log/atualizar-apps
+   sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh /usr/local/bin/atualizar-apps.sh
+   sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron /etc/cron.d/atualizar-apps
+   sudo install -m 644 /opt/traefik/vps/atualizar-apps.logrotate /etc/logrotate.d/atualizar-apps
+   sudo rm -f /var/log/atualizar-apps.log   # o log do caminho antigo
    ```
-   `restrict` desliga terminal, agente, X11 e encaminhamentos; `command=`
-   troca qualquer comando pedido pelo deploy-vps daquele projeto (o que o
-   cliente pediu fica em `SSH_ORIGINAL_COMMAND`). Se existir `AllowUsers` ou
-   `AllowGroups` no `sshd`, inclua o `deploy` (confira com
-   `sudo sshd -T -C user=deploy,host=github,addr=1.2.3.4 | grep -iE '^allow(users|groups) '`).
-5. Gere o `known_hosts` **no seu PC** e confira a impressão digital com a
-   que a própria VPS mostra (assim o GitHub não manda a chave para uma
-   máquina falsa):
+3. **Suba a borda de novo**, para o Alloy ganhar o volume do log do cron
+   (`/var/log/atualizar-apps` montada em `/log-host`). Confira que o Alloy ficou `healthy`:
    ```bash
-   # No PC:
-   ssh-keyscan -t ed25519 IP_DA_VPS > known_hosts-vps
-   ssh-keygen -lf known_hosts-vps
-   # Na VPS (por uma sessão que você já confia):
-   ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+   cd /opt/traefik && docker compose up -d
+   docker compose ps alloy
    ```
-   Os dois `SHA256:...` precisam ser iguais. Se forem diferentes, pare.
-6. Em **cada** repositório (`conan-torres` e `traefik-default`), crie o
-   Environment `producao` limitado à `main`: Settings → Environments → New
-   environment → `producao` → Deployment branches and tags →
-   `Selected branches and tags` → Add rule → `main`. Depois os secrets, **do
-   Environment** (não do repositório), cada repositório com a própria chave:
-
-   | Secret            | Conteúdo                                                   |
-   |-------------------|------------------------------------------------------------|
-   | `VPS_HOST`        | IP (ou nome) da VPS, o mesmo usado no `ssh-keyscan`         |
-   | `VPS_SSH_KEY`     | a chave **privada** daquele repositório                     |
-   | `VPS_KNOWN_HOSTS` | o conteúdo de `known_hosts-vps` conferido no passo 5        |
-
-   Pelo `gh`, sem colar a chave em lugar nenhum. Primeiro o site; depois
-   repita com `R=C0nanT/traefik-default; K=~/.ssh/deploy-traefik-default`:
+4. **Veja as séries.** Na VPS, a rodada do cron precisa ter rodado ao menos
+   uma vez (se não rodou, rode à mão: `sudo /usr/local/bin/atualizar-apps.sh`):
    ```bash
-   R=C0nanT/conantorres.dev; K=~/.ssh/deploy-conan-torres
-   gh secret set VPS_HOST --env producao -R "$R" --body IP_DA_VPS
-   gh secret set VPS_SSH_KEY --env producao -R "$R" < "$K"
-   gh secret set VPS_KNOWN_HOSTS --env producao -R "$R" < known_hosts-vps
+   curl -s http://127.0.0.1:9100/metrics | grep -E '^deploy_'
    ```
-   O usuário `deploy` é fixo nos workflows e não vira secret.
-7. Teste a restrição do PC (manual, uma vez), **só com a chave do
-   `conan-torres`** (a do `traefik-default` dispara o deploy da borda de
-   verdade):
+   Deve aparecer `deploy_falhou{app="<pasta>"} 0` para cada site e
+   `deploy_rodada_timestamp_seconds` com a hora da rodada. No Grafana (PC),
+   o painel **Logs**, linha **Deploy (cron)**, mostra `ok` em cada site, a
+   última rodada e as linhas do log (no Explore: `{job="atualizar-apps"}`).
+5. **Force uma falha.** Escolha um site de `/opt/apps` (ex.: `<projeto>`) e
+   anote a linha atual de `IMAGE_TAG` no `.env` dele, se houver. Troque-a por
+   uma tag que não existe:
    ```bash
-   # Comando livre vira o deploy-vps, que recusa: "ERRO: SHA inválido ..."
-   ssh -i ~/.ssh/deploy-conan-torres -o IdentitiesOnly=yes deploy@IP_DA_VPS id
-   # Túnel recusado: "administratively prohibited" e o curl falha
-   ssh -i ~/.ssh/deploy-conan-torres -o IdentitiesOnly=yes -N -L 18082:127.0.0.1:8082 deploy@IP_DA_VPS &
-   sleep 3; curl -s http://localhost:18082/metrics | head -3; kill %1
+   cd /opt/apps/<projeto>
+   echo 'IMAGE_TAG=tag-que-nao-existe' >> .env
    ```
-8. Depois do teste, apague as chaves privadas e o `known_hosts-vps` do PC
-   (`rm ~/.ssh/deploy-conan-torres ~/.ssh/deploy-traefik-default known_hosts-vps`);
-   a privada fica só no secret. Se precisar de novo, gere outra e troque a
-   linha do `authorized_keys` e o secret.
-
-Para aplicar uma mudança da borda depois do merge na `main`: Actions →
-**Deploy da borda** → **Run workflow** (branch `main`). O workflow
-(`.github/workflows/deploy-borda.yml`) só roda por esse botão: um merge,
-inclusive de PR do Dependabot, nunca atualiza a VPS sozinho. Ele recusa
-outra branch, usa os secrets do Environment `producao`, entra por `ssh` com
-`StrictHostKeyChecking=yes` (sem action de terceiros) pedindo o deploy da
-borda e, no fim, exige resposta 2xx (sem seguir redirecionamento) de https://conantorres.dev/ e
-https://bbcontainermodular.com/. O log mostra o commit de antes e o de
-depois; se algo falha, a execução fica vermelha.
-
-Para revogar o acesso de um repositório, apague a linha dele no
-`authorized_keys` (ou `sudo deluser --remove-home deploy` para todos) e o
-secret `VPS_SSH_KEY` do Environment.
-
-### Checklist do primeiro deploy
-
-Siga a ordem. O CI do `conantorres.dev` só ganha o deploy pelo CI depois que
-a VPS e o GitHub estiverem prontos: antes disso, o cron continua atualizando
-o site. Marque cada item ao validar.
-
-**1. Instalar na VPS** (passos 1 a 5 acima)
-- [ ] `/usr/local/sbin/deploy-vps` instalado com `install -m 755`, a partir
-      do `/opt/traefik` já atualizado.
-- [ ] `id deploy` mostra só o grupo `deploy`, sem `docker` nem `sudo`.
-- [ ] `sudo -l -U deploy` lista só as duas linhas do `deploy-vps`.
-- [ ] `authorized_keys` tem uma linha por repositório, cada uma com
-      `restrict` e `command=`.
-- [ ] A impressão digital da VPS é igual à do `known_hosts-vps`.
-
-**2. Environments e secrets** (passo 6 acima)
-- [ ] Environment `producao` em `conantorres.dev` e em `traefik-default`,
-      com `Selected branches and tags` → `main`.
-- [ ] Os três secrets (`VPS_HOST`, `VPS_SSH_KEY`, `VPS_KNOWN_HOSTS`) estão no
-      Environment, não no repositório, e cada repositório tem a própria chave.
-- [ ] A chave privada foi apagada do PC (passo 8).
-
-**3. Marcador da pasta do site** (antes do passo 4)
-- [ ] Script do cron reinstalado a partir do `/opt/traefik` atualizado (o
-      antigo não conhece o marcador):
-      `sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh /usr/local/bin/atualizar-apps.sh`.
-- [ ] `sudo touch /opt/apps/conan-torres/.deploy-pelo-ci` na VPS.
-- [ ] A próxima rodada do cron não deixa linhas novas de `conan-torres` em
-      `/var/log/atualizar-apps.log`.
-
-**4. Mesclar o job do conan-torres** (só depois dos itens 1 a 3)
-- [ ] O job de deploy do `conan-torres` está na `main`. Ele roda depois do
-      `build-push`, só na `main`, só depois do CI verde (ou de um disparo
-      manual na `main`).
-
-**5. Primeiro deploy**
-- [ ] Site: a execução da `main` do `conan-torres` fica verde, com o job de
-      deploy concluído, e `https://conantorres.dev/` responde 200.
-- [ ] Na VPS, `docker compose ps` em `/opt/apps/conan-torres` mostra
-      `(healthy)`.
-- [ ] Borda: Actions → **Deploy da borda** → **Run workflow** (branch `main`)
-      fica verde, e o log mostra o commit de antes e o de depois.
-- [ ] Chave de um repositório não faz deploy do outro: com a chave do
-      `conan-torres`, pedir `traefik` dá `ERRO: SHA inválido`.
-- [ ] Chave de um repositório não abre shell nem túnel (passo 7 acima).
-
-**6. Falha forçada e e-mail**
-- [ ] Na conta do dono: GitHub → Settings → Notifications → Actions, marcar
-      **Only notify for failed workflows** e deixar o e-mail ligado.
-- [ ] Com `IMAGE_TAG=<sha>` no `/opt/apps/conan-torres/.env`, rodar o deploy
-      do `conan-torres` na `main`: a execução fica vermelha e a mensagem diz
-      que a versão está travada.
-- [ ] O e-mail de falha chegou.
-- [ ] Tirar `IMAGE_TAG` do `.env` e rodar o deploy de novo: fica verde.
+   Se o `.env` já tinha `IMAGE_TAG`, troque o valor em vez de acrescentar
+   uma linha. Espere até 10 min (a próxima rodada). O `pull` falha, o `up`
+   não roda e o site segue no ar com a imagem atual. A rodada grava
+   `deploy_falhou{app="<projeto>"} 1` e o log ganha
+   `ERRO <projeto>: ...` (`tail -3 /var/log/atualizar-apps/atualizar-apps.log`). Em até
+   cerca de 11 min o Telegram recebe **Deploy falhou (VPS)** com o nome do
+   site. No painel, o site aparece como `falhou`.
+6. **Desfaça.** Tire a linha `IMAGE_TAG` que você acrescentou, ou volte o
+   valor anterior. A rodada seguinte (ou `sudo /usr/local/bin/atualizar-apps.sh`
+   à mão) grava `0`, e o Telegram recebe o aviso de resolvido. Confira no
+   painel: o site volta a `ok`.
+7. **Opcional: cron parado.** Tire o cron do ar por mais de 30 min:
+   ```bash
+   sudo rm /etc/cron.d/atualizar-apps
+   ```
+   Depois de 30 min sem rodada, o Telegram recebe **Cron de deploy parado**.
+   Para religar, reinstale o arquivo do repositório:
+   ```bash
+   sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron /etc/cron.d/atualizar-apps
+   ```
+   Na rodada seguinte, o alerta se resolve.
 
 ## Certificados (Let's Encrypt)
 
@@ -774,7 +715,7 @@ Marque cada item ao validar:
 - [ ] Depois do merge da configuração, conferir em
       Insights → Dependency graph → Dependabot que o GitHub leu o
       `.github/dependabot.yml` sem erro e lista os dois diretórios (`/` e
-      `/exemplos/whoami`) e o ecossistema `github-actions`.
+      `/exemplos/whoami`).
 
 ### Estudo extra: delegação do DNS-01 por CNAME
 
