@@ -11,6 +11,7 @@ simples para plugar sites. Cada site vive no próprio repositório e entra pelo
 [Plugar um site](docs/como-plugar-um-projeto.md) ·
 [Painel e métricas](#painel-e-métricas-via-túnel-ssh) ·
 [Logs](#logs-loki-e-alloy) ·
+[Checklist da falha forçada](#checklist-manual-da-falha-forçada) ·
 [Certificados](#certificados-lets-encrypt) ·
 [Próximos passos](#próximos-passos)
 
@@ -439,6 +440,68 @@ gh api -X DELETE repos/C0nanT/conantorres.dev/environments/producao
 
 No PC, se ainda existirem, apague as chaves
 `~/.ssh/deploy-conan-torres` e `~/.ssh/deploy-traefik-default`.
+
+## Checklist manual da falha forçada
+
+Confirma o caminho inteiro do aviso de deploy: cron na VPS → métrica → painel
+Logs → Telegram. Não é automatizado. Faça depois de publicar esta versão e
+sempre que mexer no cron ou nos alertas de deploy. Os passos 1 a 3 são na
+VPS; os de conferir no painel são no PC (o Grafana fica no
+[`homelab-monitoring`](../homelab-monitoring)).
+
+1. **Atualize o repositório da borda:**
+   ```bash
+   cd /opt/traefik && git pull
+   ```
+2. **Reinstale o script e o logrotate do cron.** A cópia instalada não se
+   atualiza com o `git pull`:
+   ```bash
+   sudo install -m 755 /opt/traefik/vps/atualizar-apps.sh /usr/local/bin/atualizar-apps.sh
+   sudo install -m 644 /opt/traefik/vps/atualizar-apps.logrotate /etc/logrotate.d/atualizar-apps
+   ```
+3. **Suba a borda de novo**, para o Alloy ganhar o volume do log do cron
+   (`/var/log` montada em `/log-host`). Confira que o Alloy ficou `healthy`:
+   ```bash
+   cd /opt/traefik && docker compose up -d
+   docker compose ps alloy
+   ```
+4. **Veja as séries.** Na VPS, a rodada do cron precisa ter rodado ao menos
+   uma vez (se não rodou, rode à mão: `sudo /usr/local/bin/atualizar-apps.sh`):
+   ```bash
+   curl -s http://127.0.0.1:9100/metrics | grep -E '^deploy_'
+   ```
+   Deve aparecer `deploy_falhou{app="<pasta>"} 0` para cada site e
+   `deploy_rodada_timestamp_seconds` com a hora da rodada. No Grafana (PC),
+   o painel **Logs**, linha **Deploy (cron)**, mostra `ok` em cada site, a
+   última rodada e as linhas do log (no Explore: `{job="atualizar-apps"}`).
+5. **Force uma falha.** Escolha um site de `/opt/apps` (ex.: `<projeto>`) e
+   anote a linha atual de `IMAGE_TAG` no `.env` dele, se houver. Troque-a por
+   uma tag que não existe:
+   ```bash
+   cd /opt/apps/<projeto>
+   echo 'IMAGE_TAG=tag-que-nao-existe' >> .env
+   ```
+   Se o `.env` já tinha `IMAGE_TAG`, troque o valor em vez de acrescentar
+   uma linha. Espere até 10 min (a próxima rodada). O `pull` falha, o `up`
+   não roda e o site segue no ar com a imagem atual. A rodada grava
+   `deploy_falhou{app="<projeto>"} 1` e o log ganha
+   `ERRO <projeto>: ...` (`tail -3 /var/log/atualizar-apps.log`). Em até
+   cerca de 11 min o Telegram recebe **Deploy falhou (VPS)** com o nome do
+   site. No painel, o site aparece como `falhou`.
+6. **Desfaça.** Tire a linha `IMAGE_TAG` que você acrescentou, ou volte o
+   valor anterior. A rodada seguinte (ou `sudo /usr/local/bin/atualizar-apps.sh`
+   à mão) grava `0`, e o Telegram recebe o aviso de resolvido. Confira no
+   painel: o site volta a `ok`.
+7. **Opcional: cron parado.** Tire o cron do ar por mais de 30 min:
+   ```bash
+   sudo rm /etc/cron.d/atualizar-apps
+   ```
+   Depois de 30 min sem rodada, o Telegram recebe **Cron de deploy parado**.
+   Para religar, reinstale o arquivo do repositório:
+   ```bash
+   sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron /etc/cron.d/atualizar-apps
+   ```
+   Na rodada seguinte, o alerta se resolve.
 
 ## Certificados (Let's Encrypt)
 
