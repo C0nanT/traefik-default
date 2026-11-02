@@ -18,8 +18,9 @@
 #      também é onde "traefik healthcheck --ping" procura a configuração);
 #   4. gera o router do painel/API, que só aceita o túnel SSH (detalhes na
 #      seção "PAINEL/API SÓ PELO TÚNEL SSH", mais abaixo);
-#   5. gera a peça so-cloudflare, com as faixas do trustedIPs (seção "PEÇA
-#      so-cloudflare", mais abaixo);
+#   5. gera as peças so-cloudflare e limite-taxa, com as faixas do
+#      trustedIPs (seções "PEÇA so-cloudflare" e "PEÇA limite-taxa", mais
+#      abaixo);
 #   6. vira o processo do Traefik (exec), recebendo os sinais do Docker.
 #
 # O token da Cloudflare NÃO passa por aqui: o Traefik (biblioteca lego) lê a
@@ -205,8 +206,25 @@ faixas_yaml() {
   echo "      ipAllowList:"
   echo "        sourceRange:"
   faixas_yaml "          "
+  # PEÇA limite-taxa (LIMITE POR VISITANTE REAL)
+  # Média de 5 req/s, rajada de 100, período de 1 s; acima disso, 429. O
+  # visitante é o IP mais à direita do X-Forwarded-For que não esteja nas
+  # faixas da Cloudflare (excludedIPs = a mesma lista), e não o servidor da
+  # Cloudflare que repassou a conexão. Vindo de fora das faixas, a entrada
+  # descarta o X-Forwarded-For (forwardedHeaders.trustedIPs) e o limite
+  # conta pelo IP da conexão: um cabeçalho forjado não abre um balde novo.
+  # O estado fica na memória do Traefik e zera quando ele reinicia.
+  echo "    limite-taxa:"
+  echo "      rateLimit:"
+  echo "        average: 5"
+  echo "        burst: 100"
+  echo "        period: 1s"
+  echo "        sourceCriterion:"
+  echo "          ipStrategy:"
+  echo "            excludedIPs:"
+  faixas_yaml "              "
 } > "$CLOUDFLARE_ARQUIVO"
 
-echo "iniciar.sh: so-cloudflare aceita $(printf '%s\n' "$FAIXAS_CLOUDFLARE" | wc -l) faixa(s)"
+echo "iniciar.sh: so-cloudflare aceita $(printf '%s\n' "$FAIXAS_CLOUDFLARE" | wc -l) faixa(s); limite-taxa ignora as mesmas no X-Forwarded-For"
 
 exec traefik "$@"

@@ -34,7 +34,7 @@ secao_readme() {
   awk -v t="## $1" -v fora="${2:-}" '/^## /{on=($0 == t)} (fora == "") ? on : !on' README.md
 }
 G=docs/como-plugar-um-projeto.md
-for n in web websecure proxy le-dns le-http 'seguranca@file' 'compressao@file' 'www-para-raiz@file' 'so-cloudflare@file'; do
+for n in web websecure proxy le-dns le-http 'seguranca@file' 'compressao@file' 'www-para-raiz@file' 'so-cloudflare@file' 'limite-taxa@file'; do
   tem $G "$n" "guia lista $n"
 done
 tem $G 'tls.domains[0].sans=*.' "guia mostra labels do le-dns (curinga)"
@@ -97,6 +97,9 @@ tem README.md '## Nuvem laranja da Cloudflare' "README: seção da nuvem laranja
 tem README.md 'so-cloudflare@file' "README cita a peça so-cloudflare@file"
 tem_re README.md 'so-cloudflare@file.*nuvem laranja' "README: so-cloudflare@file só para nuvem laranja"
 tem_re $G 'so-cloudflare@file.*nuvem laranja' "guia: so-cloudflare@file só para nuvem laranja (na linha da peça)"
+# Peça limite-taxa: limite por visitante real (IP fora da Cloudflare no X-Forwarded-For).
+tem README.md 'limite-taxa@file' "README cita a peça limite-taxa@file"
+tem_re $G 'limite-taxa@file.*429' "guia: limite-taxa@file responde 429 acima do limite (na linha da peça)"
 tem README.md 'https://www.cloudflare.com/ips-v4' "README: de onde vêm as faixas da Cloudflare"
 tem README.md 'Full (strict)' "README: modo SSL/TLS Full (strict)"
 tem README.md 'loki_dados_bytes' "README: disco do Loki publicado pelo node exporter"

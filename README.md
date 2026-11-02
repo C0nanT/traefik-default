@@ -844,6 +844,18 @@ responder 403, os outros seguem normais. Confira pelo túnel do painel:
 `curl -s http://127.0.0.1:8080/api/http/middlewares/so-cloudflare@file`.
 Ao desligar a nuvem de um site, tire a peça das labels dele antes.
 
+**Limite de taxa por visitante.** A peça `limite-taxa@file` dá a cada
+visitante uma média de 5 req/s, com rajada de 100; acima disso, 429. O
+visitante é o IP mais à direita do `X-Forwarded-For` fora das faixas da
+Cloudflare (`excludedIPs` com a mesma lista do `trustedIPs`), e não o
+servidor da Cloudflare que repassou a conexão. Fora da Cloudflare o cabeçalho
+é descartado na entrada e o limite conta pelo IP da conexão, então um
+`X-Forwarded-For` forjado não abre um balde novo. Sai do mesmo arquivo gerado
+que a `so-cloudflare@file`; o estado fica na memória do Traefik e zera quando
+ele reinicia. Se aparecer 429 para gente de verdade, o primeiro ajuste é a
+rajada (em `traefik/iniciar.sh`). Confira pelo túnel do painel:
+`curl -s http://127.0.0.1:8080/api/http/middlewares/limite-taxa@file`.
+
 **Voltar atrás:** desligue a nuvem (cinza) no DNS. A lista de IPs confiáveis
 pode ficar; com a nuvem cinza ela não faz nada.
 

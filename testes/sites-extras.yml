@@ -30,6 +30,20 @@ services:
       - "traefik.http.routers.so-cloudflare.middlewares=so-cloudflare@file"
       - "traefik.http.services.so-cloudflare.loadbalancer.server.port=80"
 
+  # Site que pede a peça limite-taxa@file. O smoke test (11-limite-taxa.sh)
+  # manda uma rajada acima de 100 e espera 429.
+  limite-taxa:
+    image: ${IMAGEM_WHOAMI:?definida pelo testes/smoke.sh}
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.limite-taxa.rule=Host(`${HOST_LIMITE_TAXA:?}`)"
+      - "traefik.http.routers.limite-taxa.entrypoints=websecure"
+      - "traefik.http.routers.limite-taxa.middlewares=limite-taxa@file"
+      - "traefik.http.services.limite-taxa.loadbalancer.server.port=80"
+
   # Container comum de um "site" que só escreve no log: uma linha marcada no
   # stdout e outra no stderr a cada 2 s. O smoke test (07-logs.sh) procura
   # essas linhas no Loki, com os rótulos do compose (projeto/servico).
