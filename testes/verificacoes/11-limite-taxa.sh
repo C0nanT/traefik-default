@@ -72,6 +72,9 @@ saida="$(rajada "$HOST_TESTE")"
 n_429="$(contar 429 "$saida")"
 conferir "o whoami, sem a peça, não recebe nenhum 429 na rajada de $RAJADA" \
   "respostas: $(resumo "$saida")" [ "$n_429" -eq 0 ]
+# Sem esta conta, uma rajada cortada (timeout, whoami fora) passaria acima.
+conferir "a rajada ao whoami tem um status por requisição ($RAJADA)" \
+  "respostas: $(resumo "$saida")" [ "$(grep -c . <<<"$saida")" -eq "$RAJADA" ]
 
 # 4) A peça na API do painel: média 5, rajada 100, período 1 s e excludedIPs
 # igual ao trustedIPs que o Traefik leu da entrada websecure.
