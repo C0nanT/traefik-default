@@ -18,7 +18,9 @@
 #      também é onde "traefik healthcheck --ping" procura a configuração);
 #   4. gera o router do painel/API, que só aceita o túnel SSH (detalhes na
 #      seção "PAINEL/API SÓ PELO TÚNEL SSH", mais abaixo);
-#   5. vira o processo do Traefik (exec), recebendo os sinais do Docker.
+#   5. gera a peça so-cloudflare, com as faixas do trustedIPs (seção "PEÇA
+#      so-cloudflare", mais abaixo);
+#   6. vira o processo do Traefik (exec), recebendo os sinais do Docker.
 #
 # O token da Cloudflare NÃO passa por aqui: o Traefik (biblioteca lego) lê a
 # variável CF_DNS_API_TOKEN direto do ambiente do container, e só quando
@@ -154,5 +156,57 @@ http:
 EOF_PAINEL
 
 echo "iniciar.sh: painel/API aceita só a origem $PAINEL_ORIGEM (túnel SSH)"
+
+# ---------------------------------------------------------------------------
+# PEÇA so-cloudflare (SÓ CONEXÕES DA CLOUDFLARE)
+# Um site com nuvem laranja pede "so-cloudflare@file" nas labels para só
+# aceitar conexões cujo IP de origem esteja nas faixas da Cloudflare (o resto
+# recebe 403). Sem ipStrategy: o ipAllowList olha o IP da conexão TCP, que
+# não dá para forjar, e não o X-Forwarded-For.
+#
+# As faixas vêm da MESMA lista do traefik.yml (forwardedHeaders.trustedIPs,
+# âncora "ips_cloudflare"): atualizar a lista lá atualiza a peça na próxima
+# partida. A leitura pega as linhas '- "faixa"' logo depois da âncora
+# (comentários e linhas vazias no meio são pulados) e para na primeira linha
+# de outro tipo.
+#
+# Lista vazia (âncora renomeada, formato mudou...): fecha em vez de abrir. A
+# peça aceita só 127.0.0.1/32, os sites que a usam respondem 403 e o resto da
+# borda segue normal.
+# ---------------------------------------------------------------------------
+CLOUDFLARE_ARQUIVO=/etc/traefik/dynamic/gerado/cloudflare.yml
+
+FAIXAS_CLOUDFLARE="$(awk '
+  lendo && /^[ \t]*(#|$)/ { next }
+  lendo && /^[ \t]*- "[^"]+"[ \t]*$/ {
+    sub(/^[ \t]*- "/, ""); sub(/"[ \t]*$/, ""); print; next
+  }
+  lendo { exit }
+  /trustedIPs: &ips_cloudflare[ \t]*$/ { lendo = 1 }
+' "$MODELO")"
+
+if [ -z "$FAIXAS_CLOUDFLARE" ]; then
+  FAIXAS_CLOUDFLARE="127.0.0.1/32"
+  echo "iniciar.sh: AVISO: faixas da Cloudflare não encontradas em trustedIPs (âncora ips_cloudflare); so-cloudflare fechada (só 127.0.0.1)" >&2
+fi
+
+# faixas_yaml RECUO -> uma linha '- "faixa"' por faixa, com RECUO na frente.
+faixas_yaml() {
+  printf '%s\n' "$FAIXAS_CLOUDFLARE" | while IFS= read -r faixa; do
+    printf '%s- "%s"\n' "$1" "$faixa"
+  done
+}
+
+{
+  echo "# GERADO pelo traefik/iniciar.sh a cada partida. Não edite."
+  echo "http:"
+  echo "  middlewares:"
+  echo "    so-cloudflare:"
+  echo "      ipAllowList:"
+  echo "        sourceRange:"
+  faixas_yaml "          "
+} > "$CLOUDFLARE_ARQUIVO"
+
+echo "iniciar.sh: so-cloudflare aceita $(printf '%s\n' "$FAIXAS_CLOUDFLARE" | wc -l) faixa(s)"
 
 exec traefik "$@"

@@ -831,6 +831,19 @@ responde na porta 80, não chega. Em zonas da Cloudflare, use o `le-dns`.
    docker compose logs --since 2m traefik | grep '"RequestHost":"conantorres.dev"' | tail -n 1 | grep -o '"ClientHost":"[^"]*"'
    ```
 
+**Fechar a origem para quem não vem da Cloudflare.** A peça
+`so-cloudflare@file` só serve para site com nuvem laranja: ela responde 403 a
+toda conexão cujo IP de origem (o da conexão, não um cabeçalho) esteja fora
+das faixas da Cloudflare. O site pede a peça nas labels (veja o
+[guia](docs/como-plugar-um-projeto.md)); quem não pede, como um site de
+nuvem cinza, não muda. A peça é gerada pelo `traefik/iniciar.sh` a cada
+partida, a partir da mesma lista do `trustedIPs` (âncora `ips_cloudflare`),
+em `traefik/dynamic/gerado/`. Se a lista sair vazia, o log mostra um
+`AVISO` e a peça aceita só `127.0.0.1/32`: os sites que a usam passam a
+responder 403, os outros seguem normais. Confira pelo túnel do painel:
+`curl -s http://127.0.0.1:8080/api/http/middlewares/so-cloudflare@file`.
+Ao desligar a nuvem de um site, tire a peça das labels dele antes.
+
 **Voltar atrás:** desligue a nuvem (cinza) no DNS. A lista de IPs confiáveis
 pode ficar; com a nuvem cinza ela não faz nada.
 

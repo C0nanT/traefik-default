@@ -17,6 +17,7 @@ Nomes oficiais que todo site usa (definidos nesta pilha, não invente outros):
 | Peça: segurança | `seguranca@file` | HSTS, X-Frame-Options DENY, nosniff, Referrer-Policy |
 | Peça: compressão | `compressao@file` | gzip/brotli/zstd acima de 1 KB |
 | Peça: www para raiz | `www-para-raiz@file` | redirect permanente `www.x` para `x`, preservando caminho e query |
+| Peça: só Cloudflare | `so-cloudflare@file` | só aceita conexões vindas das faixas da Cloudflare (o resto recebe 403). **Só para site com nuvem laranja**: com nuvem cinza todo visitante recebe 403 |
 
 O TLS mínimo 1.2 vale para todos os routers sem nenhuma label.
 
@@ -102,6 +103,21 @@ O router do `www` **precisa** do `certresolver`: o visitante chega em
 Regras comuns: não declare redirect HTTP para HTTPS (é global), nem regex de
 www (use `www-para-raiz@file`), nem `tls=true`. O router do `www` sempre
 precisa de `service=<serviço do site>`, porque o redirect não chega ao app.
+
+**Só Cloudflare (opcional).** A peça `so-cloudflare@file` só aceita
+conexões cujo IP de origem esteja nas faixas da Cloudflare; as outras
+recebem 403. Ela olha o IP da conexão, não um cabeçalho. As faixas são as
+mesmas do `trustedIPs` em `traefik/traefik.yml`.
+Ponha a peça primeiro na lista, nos dois routers, para a recusa vir antes de
+qualquer trabalho:
+
+```yaml
+  - "traefik.http.routers.meusite.middlewares=so-cloudflare@file,seguranca@file,compressao@file"
+  - "traefik.http.routers.meusite-www.middlewares=so-cloudflare@file,www-para-raiz@file"
+```
+
+Não use em site com nuvem cinza (DNS fora da Cloudflare, como quem usa
+`le-http`): ali todo visitante chega direto e recebe 403.
 
 ## Imagem privada no GHCR
 
