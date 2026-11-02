@@ -167,20 +167,34 @@ echo "iniciar.sh: painel/API aceita só a origem $PAINEL_ORIGEM (túnel SSH)"
 #
 # As faixas vêm da MESMA lista do traefik.yml (forwardedHeaders.trustedIPs,
 # âncora "ips_cloudflare"): atualizar a lista lá atualiza a peça na próxima
-# partida. A leitura pega as linhas '- "faixa"' logo depois da âncora
-# (comentários e linhas vazias no meio são pulados) e para na primeira linha
-# de outro tipo.
+# partida. A leitura pega os itens da lista logo depois da âncora, com ou sem
+# aspas (- faixa, - 'faixa' ou - "faixa", com comentário opcional no fim),
+# pula comentários e linhas vazias no meio e para na primeira linha que não
+# é item.
 #
-# Lista vazia (âncora renomeada, formato mudou...): fecha em vez de abrir. A
-# peça aceita só 127.0.0.1/32, os sites que a usam respondem 403 e o resto da
-# borda segue normal.
+# Lista vazia (âncora renomeada, formato mudou...): fecha em vez de abrir. As
+# duas peças ficam só com 127.0.0.1/32: os sites com so-cloudflare respondem
+# 403; a limite-taxa deixa de reconhecer a Cloudflare no X-Forwarded-For, e
+# quem chega pelo mesmo servidor da Cloudflare divide um limite só. O resto
+# da borda segue normal.
 # ---------------------------------------------------------------------------
 CLOUDFLARE_ARQUIVO=/etc/traefik/dynamic/gerado/cloudflare.yml
 
-FAIXAS_CLOUDFLARE="$(awk '
+# A aspa simples chega ao awk pela variável q (o programa está entre aspas
+# simples). Item em formato desconhecido também encerra a leitura.
+FAIXAS_CLOUDFLARE="$(awk -v q="'" '
   lendo && /^[ \t]*(#|$)/ { next }
-  lendo && /^[ \t]*- "[^"]+"[ \t]*$/ {
-    sub(/^[ \t]*- "/, ""); sub(/"[ \t]*$/, ""); print; next
+  lendo && /^[ \t]*-[ \t]/ {
+    item = $0
+    sub(/^[ \t]*-[ \t]+/, "", item)
+    sub(/[ \t]+#.*$/, "", item)
+    sub(/[ \t]+$/, "", item)
+    if (item ~ /^"[^"]+"$/ || item ~ ("^" q "[^" q "]+" q "$"))
+      item = substr(item, 2, length(item) - 2)
+    else if (item !~ ("^[^\"" q " \t#]+$"))
+      exit
+    print item
+    next
   }
   lendo { exit }
   /trustedIPs: &ips_cloudflare[ \t]*$/ { lendo = 1 }
@@ -188,7 +202,7 @@ FAIXAS_CLOUDFLARE="$(awk '
 
 if [ -z "$FAIXAS_CLOUDFLARE" ]; then
   FAIXAS_CLOUDFLARE="127.0.0.1/32"
-  echo "iniciar.sh: AVISO: faixas da Cloudflare não encontradas em trustedIPs (âncora ips_cloudflare); so-cloudflare fechada (só 127.0.0.1)" >&2
+  echo "iniciar.sh: AVISO: faixas da Cloudflare não encontradas em trustedIPs (âncora ips_cloudflare); so-cloudflare fechada e limite-taxa sem reconhecer a Cloudflare (as duas só com 127.0.0.1)" >&2
 fi
 
 # faixas_yaml RECUO -> uma linha '- "faixa"' por faixa, com RECUO na frente.

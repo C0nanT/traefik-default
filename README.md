@@ -840,7 +840,10 @@ nuvem cinza, não muda. A peça é gerada pelo `traefik/iniciar.sh` a cada
 partida, a partir da mesma lista do `trustedIPs` (âncora `ips_cloudflare`),
 em `traefik/dynamic/gerado/`. Se a lista sair vazia, o log mostra um
 `AVISO` e a peça aceita só `127.0.0.1/32`: os sites que a usam passam a
-responder 403, os outros seguem normais. Confira pelo túnel do painel:
+responder 403, os outros seguem normais. A `limite-taxa@file` (abaixo) usa a
+mesma lista: vazia, ela não reconhece mais a Cloudflare no
+`X-Forwarded-For`, e quem chega pelo mesmo servidor da Cloudflare divide um
+limite só. Confira pelo túnel do painel:
 `curl -s http://127.0.0.1:8080/api/http/middlewares/so-cloudflare@file`.
 Ao desligar a nuvem de um site, tire a peça das labels dele antes.
 
