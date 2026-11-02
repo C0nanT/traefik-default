@@ -157,6 +157,51 @@ afirmar() {
   fi
 }
 
+# site_responde HOST STATUS  -> faz um GET https em HOST e dá certo se o
+# status for STATUS. Para esperar a descoberta de um site (antes dela, 404):
+#   esperar_ate 30 site_responde "$HOST" 200
+site_responde() {
+  req https "$1" /
+  [ "$RESP_STATUS" = "$2" ]
+}
+
+# painel_api CAMINHO [args extras do curl...]  -> GET na API do painel pelo
+# loopback do host (como o túnel SSH chega) e imprime o corpo.
+painel_api() {
+  local caminho="$1"
+  shift
+  curl -s --max-time 10 "$@" "http://127.0.0.1:8080$caminho" 2>/dev/null
+}
+
+# afirmar_faixas_do_trustedips DESCRICAO JSON_DA_PECA FILTRO_JQ  -> OK se a
+# lista que FILTRO_JQ tira da peça for igual (sem ordem) ao trustedIPs que o
+# Traefik leu da entrada websecure. A lista da entrada não pode estar vazia:
+# vazia nos dois lados também seria "igual".
+afirmar_faixas_do_trustedips() {
+  local faixas_peca faixas_entrada
+  faixas_peca="$(jq -c "$3 | sort" <<<"$2" 2>/dev/null)"
+  faixas_entrada="$(painel_api /api/entrypoints/websecure |
+    jq -c '.forwardedHeaders.trustedIPs | sort' 2>/dev/null)"
+  conferir "$1" "peça: '${faixas_peca:-nenhum}'; trustedIPs: '${faixas_entrada:-nenhum}'" \
+    _listas_iguais_nao_vazias "$faixas_peca" "$faixas_entrada"
+}
+_listas_iguais_nao_vazias() {
+  [ -n "$2" ] && [ "$2" != null ] && [ "$2" != '[]' ] && [ "$1" = "$2" ]
+}
+
+# Limpezas das verificações: ao_limpar FUNCAO registra uma função que o
+# limpar do smoke.sh roda no fim, mesmo se o teste for interrompido.
+LIMPEZAS=()
+ao_limpar() {
+  LIMPEZAS+=("$1")
+}
+rodar_limpezas() {
+  local f
+  for f in "${LIMPEZAS[@]}"; do
+    "$f" || true
+  done
+}
+
 # esperar_ate SEGUNDOS COMANDO...  -> repete o comando até dar certo ou estourar o tempo.
 esperar_ate() {
   local limite="$1"

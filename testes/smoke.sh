@@ -19,6 +19,8 @@
 # está de pé, e podem usar as funções de testes/lib.sh (req, afirmar_status,
 # afirmar_cabecalho, ...), as funções borda/sites/vizinho abaixo e as
 # variáveis ID_TRAEFIK e IMAGEM_TRAEFIK (definidas depois que a pilha sobe).
+# O que uma verificação cria fora da pilha (container avulso, pasta
+# temporária) ela registra com ao_limpar, para sair junto no fim.
 
 set -uo pipefail
 
@@ -71,6 +73,7 @@ export LOG_CRON_DIR
 
 limpar() {
   secao "Derrubando a pilha"
+  rodar_limpezas
   sites down -v --remove-orphans >/dev/null 2>&1 || true
   borda down -v --remove-orphans >/dev/null 2>&1 || true
   if [ "$REDE_CRIADA" = 1 ]; then
@@ -122,11 +125,7 @@ fi
 
 # A descoberta de containers pelo Traefik é assíncrona: espera o whoami
 # começar a responder antes das verificações.
-whoami_responde() {
-  req https "$HOST_TESTE" /
-  [ "$RESP_STATUS" = 200 ]
-}
-if ! esperar_ate 30 whoami_responde; then
+if ! esperar_ate 30 site_responde "$HOST_TESTE" 200; then
   echo "O whoami não ficou acessível via Traefik em 30s." >&2
   borda logs --tail 50 traefik >&2 || true
 fi

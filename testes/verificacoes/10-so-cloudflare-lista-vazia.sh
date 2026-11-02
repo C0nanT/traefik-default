@@ -11,12 +11,22 @@
 
 secao "Peça so-cloudflare: lista de faixas vazia fecha a peça"
 
+# Os containers avulsos levam esta label: a limpeza os acha mesmo se o teste
+# for interrompido antes de o ID ser guardado.
+ROTULO_AVULSO=traefik-smoke.avulso=lista-vazia
+
 dir_vazia="$(mktemp -d)"
+limpar_lista_vazia() {
+  docker ps -aq --filter "label=$ROTULO_AVULSO" | xargs -r docker rm -f >/dev/null 2>&1
+  rm -rf "$dir_vazia"
+}
+ao_limpar limpar_lista_vazia
 
 # traefik_avulso MODELO -> sobe um Traefik sem rede com MODELO como traefik.yml
 # e imprime o ID do container.
 traefik_avulso() {
-  docker run -d --rm --network none --tmpfs /acme --tmpfs /etc/traefik/dynamic/gerado \
+  docker run -d --rm --network none --label "$ROTULO_AVULSO" \
+    --tmpfs /acme --tmpfs /etc/traefik/dynamic/gerado \
     -v "$1:/etc/traefik/modelo/traefik.yml:ro" \
     -v "$RAIZ/traefik/iniciar.sh:/etc/traefik/iniciar.sh:ro" \
     -v "$RAIZ/traefik/dynamic:/etc/traefik/dynamic:ro" \
@@ -38,11 +48,18 @@ sed -e 's/ips_cloudflare/faixas_renomeadas/g' \
 
 for caso in sem-itens ancora-renomeada; do
   id_vazia="$(traefik_avulso "$dir_vazia/$caso.yml")"
-  afirmar "[$caso] o Traefik sobe (ping responde em até 30 s)" \
-    esperar_ate 30 docker exec "$id_vazia" traefik healthcheck --ping
+  if esperar_ate 30 docker exec "$id_vazia" traefik healthcheck --ping; then
+    ok "[$caso] o Traefik sobe (ping responde em até 30 s)"
+  else
+    falha "[$caso] o Traefik sobe (ping responde em até 30 s)" \
+      "sem resposta do ping em 30 s; fim do log: $(docker logs --tail 5 "$id_vazia" 2>&1 | tr '\n' ' ')"
+  fi
   afirmar "[$caso] o log mostra o AVISO da lista vazia" \
     grep -q 'AVISO.*so-cloudflare' <<<"$(docker logs "$id_vazia" 2>&1)"
-  esperar_ate 10 api_avulso "$id_vazia" /api/http/middlewares/so-cloudflare@file
+  if ! esperar_ate 10 api_avulso "$id_vazia" /api/http/middlewares/so-cloudflare@file; then
+    falha "[$caso] a API do Traefik avulso mostra a peça em até 10 s" \
+      "GET /api/http/middlewares/so-cloudflare@file sem resposta de sucesso"
+  fi
   faixas="$(api_avulso "$id_vazia" /api/http/middlewares/so-cloudflare@file |
     jq -c '.ipAllowList.sourceRange' 2>/dev/null)"
   conferir "[$caso] a peça aceita só 127.0.0.1/32" \
@@ -50,4 +67,4 @@ for caso in sem-itens ancora-renomeada; do
   docker rm -f "$id_vazia" >/dev/null 2>&1
 done
 
-rm -rf "$dir_vazia"
+limpar_lista_vazia

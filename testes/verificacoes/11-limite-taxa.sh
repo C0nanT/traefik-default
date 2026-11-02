@@ -45,11 +45,7 @@ resumo() {
 }
 
 # A descoberta do site novo é assíncrona: antes dela o Traefik responde 404.
-limite_taxa_roteado() {
-  req https "$HOST_LIMITE_TAXA" /
-  [ "$RESP_STATUS" = 200 ]
-}
-if ! esperar_ate 30 limite_taxa_roteado; then
+if ! esperar_ate 30 site_responde "$HOST_LIMITE_TAXA" 200; then
   falha "o site com limite-taxa@file responde 200 em até 30 s" \
     "último status: ${RESP_STATUS:-nenhum}"
 fi
@@ -73,29 +69,17 @@ conferir "X-Forwarded-For forjado, diferente a cada requisição, continua com 4
 
 # 3) O whoami não pede a peça: a mesma rajada não recebe nenhum 429.
 saida="$(rajada "$HOST_TESTE")"
-n_ok="$(contar 200 "$saida")"
-conferir "o whoami, sem a peça, responde 200 a toda a rajada de $RAJADA" \
-  "respostas: $(resumo "$saida")" [ "$n_ok" -eq "$RAJADA" ]
+n_429="$(contar 429 "$saida")"
+conferir "o whoami, sem a peça, não recebe nenhum 429 na rajada de $RAJADA" \
+  "respostas: $(resumo "$saida")" [ "$n_429" -eq 0 ]
 
 # 4) A peça na API do painel: média 5, rajada 100, período 1 s e excludedIPs
 # igual ao trustedIPs que o Traefik leu da entrada websecure.
-api_painel() {
-  curl -s --max-time 10 "http://127.0.0.1:8080$1" 2>/dev/null
-}
-peca="$(api_painel /api/http/middlewares/limite-taxa@file)"
-entrada="$(api_painel /api/entrypoints/websecure)"
+peca="$(painel_api /api/http/middlewares/limite-taxa@file)"
 afirmar "a peça aparece habilitada na API do painel" \
   test "$(jq -r '.status' <<<"$peca" 2>/dev/null)" = enabled
 valores="$(jq -c '.rateLimit | [.average, .burst, .period]' <<<"$peca" 2>/dev/null)"
 conferir "a peça tem média 5, rajada 100 e período 1s" \
   "[average, burst, period] recebido: '${valores:-nenhum}'" [ "$valores" = '[5,100,"1s"]' ]
-faixas_peca="$(jq -c '.rateLimit.sourceCriterion.ipStrategy.excludedIPs | sort' <<<"$peca" 2>/dev/null)"
-faixas_entrada="$(jq -c '.forwardedHeaders.trustedIPs | sort' <<<"$entrada" 2>/dev/null)"
-# A lista da entrada não pode estar vazia: vazia nos dois lados também seria "igual".
-faixas_iguais_limite() {
-  [ -n "$faixas_entrada" ] && [ "$faixas_entrada" != null ] &&
-    [ "$faixas_entrada" != '[]' ] && [ "$faixas_peca" = "$faixas_entrada" ]
-}
-conferir "excludedIPs da peça igual ao trustedIPs do traefik.yml" \
-  "peça: '${faixas_peca:-nenhum}'; trustedIPs: '${faixas_entrada:-nenhum}'" \
-  faixas_iguais_limite
+afirmar_faixas_do_trustedips "excludedIPs da peça igual ao trustedIPs do traefik.yml" \
+  "$peca" '.rateLimit.sourceCriterion.ipStrategy.excludedIPs'

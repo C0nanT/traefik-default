@@ -10,11 +10,10 @@
 secao "Peça so-cloudflare: só conexões da Cloudflare"
 
 # A descoberta do site novo é assíncrona: antes dela o Traefik responde 404.
-so_cloudflare_roteado() {
-  req https "$HOST_SO_CLOUDFLARE" /
-  [ "$RESP_STATUS" != 404 ] && [ -n "$RESP_STATUS" ] && [ "$RESP_STATUS" != 000 ]
-}
-esperar_ate 30 so_cloudflare_roteado
+if ! esperar_ate 30 site_responde "$HOST_SO_CLOUDFLARE" 403; then
+  falha "o site com so-cloudflare@file responde 403 em até 30 s" \
+    "último status: ${RESP_STATUS:-nenhum}"
+fi
 
 req https "$HOST_SO_CLOUDFLARE" /
 afirmar_status "site com so-cloudflare@file recusa a conexão do host (fora da Cloudflare)" 403
@@ -28,20 +27,8 @@ afirmar_status "o whoami, sem a peça, continua com 200" 200
 
 # A peça na API do painel traz as mesmas faixas que o Traefik leu do
 # trustedIPs da entrada websecure (a âncora ips_cloudflare do traefik.yml).
-api_painel() {
-  curl -s --max-time 10 "http://127.0.0.1:8080$1" 2>/dev/null
-}
-peca="$(api_painel /api/http/middlewares/so-cloudflare@file)"
-entrada="$(api_painel /api/entrypoints/websecure)"
-faixas_peca="$(jq -c '.ipAllowList.sourceRange | sort' <<<"$peca" 2>/dev/null)"
-faixas_entrada="$(jq -c '.forwardedHeaders.trustedIPs | sort' <<<"$entrada" 2>/dev/null)"
+peca="$(painel_api /api/http/middlewares/so-cloudflare@file)"
 afirmar "a peça aparece habilitada na API do painel" \
   test "$(jq -r '.status' <<<"$peca" 2>/dev/null)" = enabled
-# A lista da entrada não pode estar vazia: vazia nos dois lados também seria "igual".
-faixas_iguais() {
-  [ -n "$faixas_entrada" ] && [ "$faixas_entrada" != null ] &&
-    [ "$faixas_entrada" != '[]' ] && [ "$faixas_peca" = "$faixas_entrada" ]
-}
-conferir "sourceRange da peça igual ao trustedIPs do traefik.yml" \
-  "peça: '${faixas_peca:-nenhum}'; trustedIPs: '${faixas_entrada:-nenhum}'" \
-  faixas_iguais
+afirmar_faixas_do_trustedips "sourceRange da peça igual ao trustedIPs do traefik.yml" \
+  "$peca" '.ipAllowList.sourceRange'
