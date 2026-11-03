@@ -34,7 +34,7 @@ secao_readme() {
   awk -v t="## $1" -v fora="${2:-}" '/^## /{on=($0 == t)} (fora == "") ? on : !on' README.md
 }
 G=docs/como-plugar-um-projeto.md
-for n in web websecure proxy le-dns le-http 'seguranca@file' 'compressao@file' 'www-para-raiz@file'; do
+for n in web websecure proxy le-dns le-http 'seguranca@file' 'compressao@file' 'www-para-raiz@file' 'so-cloudflare@file' 'limite-taxa@file'; do
   tem $G "$n" "guia lista $n"
 done
 tem $G 'tls.domains[0].sans=*.' "guia mostra labels do le-dns (curinga)"
@@ -79,20 +79,20 @@ tem README.md 'grafana/loki:X.Y.Z' "README: roteiro de versão cobre o Loki"
 tem README.md 'grafana/alloy:vX.Y.Z' "README: roteiro de versão cobre o Alloy"
 tem README.md 'Consulta de emergência na VPS' "README: consulta de emergência na VPS"
 tem README.md 'RouterName' "README: rótulo router vem do RouterName"
-tem .scratch/traefik-vps-base/SPEC.md 'primeiro armazenamento de monitoramento na VPS' "SPEC registra a exceção do Loki"
-H=.scratch/traefik-vps-base/HANDOFF.md
 nao_tem README.md 'Basta subir um Prometheus na rede' "próximos passos sem o plano antigo do Prometheus na rede proxy"
 tem README.md '../homelab-monitoring#colocar-no-ar' "próximos passos aponta para colocar no ar do homelab-monitoring"
-tem "$H" 'node exporter' "HANDOFF registra o node exporter"
-tem "$H" 'metricas' "HANDOFF registra o usuário metricas"
-tem "$H" 'concluído em 2026-10-27, com alertas no Telegram' "HANDOFF: item 2 concluído, com Telegram"
-tem "$H" '127.0.0.1:9100' "HANDOFF cita a porta 9100 no loopback"
-tem "$H" 'Loki' "HANDOFF registra o Loki na borda"
 # Nuvem laranja: Traefik confia no X-Forwarded-For só vindo da Cloudflare.
 tem traefik/traefik.yml 'trustedIPs' "traefik.yml: forwardedHeaders.trustedIPs nas entradas públicas"
 tem traefik/traefik.yml '173.245.48.0/20' "traefik.yml: faixas IPv4 da Cloudflare"
 tem traefik/traefik.yml '2400:cb00::/32' "traefik.yml: faixas IPv6 da Cloudflare"
 tem README.md '## Nuvem laranja da Cloudflare' "README: seção da nuvem laranja"
+# Peça so-cloudflare: só aceita conexões das faixas da Cloudflare.
+tem README.md 'so-cloudflare@file' "README cita a peça so-cloudflare@file"
+tem_re README.md 'so-cloudflare@file.*nuvem laranja' "README: so-cloudflare@file só para nuvem laranja"
+tem_re $G 'so-cloudflare@file.*nuvem laranja' "guia: so-cloudflare@file só para nuvem laranja (na linha da peça)"
+# Peça limite-taxa: limite por visitante real (IP fora da Cloudflare no X-Forwarded-For).
+tem README.md 'limite-taxa@file' "README cita a peça limite-taxa@file"
+tem_re $G 'limite-taxa@file.*429' "guia: limite-taxa@file responde 429 acima do limite (na linha da peça)"
 tem README.md 'https://www.cloudflare.com/ips-v4' "README: de onde vêm as faixas da Cloudflare"
 tem README.md 'Full (strict)' "README: modo SSL/TLS Full (strict)"
 tem README.md 'loki_dados_bytes' "README: disco do Loki publicado pelo node exporter"

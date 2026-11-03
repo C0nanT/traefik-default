@@ -17,6 +17,8 @@ Nomes oficiais que todo site usa (definidos nesta pilha, não invente outros):
 | Peça: segurança | `seguranca@file` | HSTS, X-Frame-Options DENY, nosniff, Referrer-Policy |
 | Peça: compressão | `compressao@file` | gzip/brotli/zstd acima de 1 KB |
 | Peça: www para raiz | `www-para-raiz@file` | redirect permanente `www.x` para `x`, preservando caminho e query |
+| Peça: só Cloudflare | `so-cloudflare@file` | só aceita conexões vindas das faixas da Cloudflare (o resto recebe 403). **Só para site com nuvem laranja**: com nuvem cinza todo visitante recebe 403 |
+| Peça: limite de taxa | `limite-taxa@file` | cada visitante tem média de 5 req/s e rajada de 100; acima disso, 429. Com nuvem laranja, o visitante é o IP real do `X-Forwarded-For`, não o servidor da Cloudflare |
 
 O TLS mínimo 1.2 vale para todos os routers sem nenhuma label.
 
@@ -102,6 +104,36 @@ O router do `www` **precisa** do `certresolver`: o visitante chega em
 Regras comuns: não declare redirect HTTP para HTTPS (é global), nem regex de
 www (use `www-para-raiz@file`), nem `tls=true`. O router do `www` sempre
 precisa de `service=<serviço do site>`, porque o redirect não chega ao app.
+
+**Só Cloudflare (opcional).** A peça `so-cloudflare@file` só aceita
+conexões cujo IP de origem esteja nas faixas da Cloudflare; as outras
+recebem 403. Ela olha o IP da conexão, não um cabeçalho. As faixas são as
+mesmas do `trustedIPs` em `traefik/traefik.yml`.
+Ponha a peça primeiro na lista, nos dois routers, para a recusa vir antes de
+qualquer trabalho:
+
+```yaml
+  - "traefik.http.routers.meusite.middlewares=so-cloudflare@file,seguranca@file,compressao@file"
+  - "traefik.http.routers.meusite-www.middlewares=so-cloudflare@file,www-para-raiz@file"
+```
+
+Não use em site com nuvem cinza (DNS fora da Cloudflare, como quem usa
+`le-http`): ali todo visitante chega direto e recebe 403.
+
+**Limite de taxa (opcional).** A peça `limite-taxa@file` dá a cada visitante
+uma média de 5 requisições por segundo, com rajada de 100 (uma página com
+dezenas de arquivos cabe); acima disso, a resposta é 429. O visitante é o IP
+mais à direita do `X-Forwarded-For` que não seja da Cloudflare (as mesmas
+faixas do `trustedIPs`), então cada um tem o seu limite, mesmo atrás do mesmo
+servidor da Cloudflare. Numa conexão que não vem da Cloudflare, o cabeçalho
+é descartado na entrada e o limite conta pelo IP da conexão: forjar o
+`X-Forwarded-For` não dá um limite novo. Serve com nuvem laranja ou cinza.
+Junto com a `so-cloudflare@file`, ponha as duas primeiro, nesta ordem:
+
+```yaml
+  - "traefik.http.routers.meusite.middlewares=so-cloudflare@file,limite-taxa@file,seguranca@file,compressao@file"
+  - "traefik.http.routers.meusite-www.middlewares=so-cloudflare@file,limite-taxa@file,www-para-raiz@file"
+```
 
 ## Imagem privada no GHCR
 

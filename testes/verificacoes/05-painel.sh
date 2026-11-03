@@ -10,16 +10,13 @@
 secao "Painel/API: só pelo túnel SSH"
 
 # Pelo host, como o túnel SSH chega (127.0.0.1:8080 publicado pelo compose).
-painel_host() {
-  curl -s --max-time 10 -o "$1" -w '%{http_code}' "http://127.0.0.1:8080$2" 2>/dev/null
-}
 tmp_api="$(mktemp)"
 afirmar "pelo loopback do host a API responde 200" \
-  test "$(painel_host "$tmp_api" /api/overview)" = 200
+  test "$(painel_api /api/overview -o "$tmp_api" -w '%{http_code}')" = 200
 afirmar "pelo loopback do host a API traz o JSON das rotas" \
   grep -q '"routers"' "$tmp_api"
 afirmar "pelo loopback do host o painel responde 200" \
-  test "$(painel_host /dev/null /dashboard/)" = 200
+  test "$(painel_api /dashboard/ -o /dev/null -w '%{http_code}')" = 200
 rm -f "$tmp_api"
 
 # status_vizinho CAMINHO [ARGS do wget...] -> imprime o status HTTP que um
