@@ -77,7 +77,7 @@ Faça uma vez por servidor (Debian/Ubuntu; ajuste ao seu sistema).
 4. **Estrutura de pastas**:
    ```
    /opt/traefik          este repositório (a borda)
-   /opt/apps/<projeto>   um por site: só docker-compose.yml e .env
+   /opt/apps/<projeto>   um por site: docker-compose.yml e .env (e .origem, opcional)
    ```
    ```bash
    sudo mkdir -p /opt/traefik /opt/apps
@@ -99,6 +99,24 @@ Faça uma vez por servidor (Debian/Ubuntu; ajuste ao seu sistema).
    Rode como `root` (o cron usa o `docker login ghcr.io` de `/root`). Para
    atualizar na hora, sem esperar: `cd /opt/apps/<projeto> && docker compose
    pull && docker compose up -d`.
+
+   **Compose da origem (opcional, por site).** Sem mais nada, o cron só puxa
+   imagens: mudança no compose do site (labels, peças) não chega sozinha. Com
+   um arquivo `.origem` na pasta do site, cada rodada busca o último commit do
+   ramo e, se o arquivo mudou, troca o `docker-compose.yml` (depois de passar
+   no `docker compose config`) e loga `compose atualizado <site> (<commit>)`:
+   ```
+   REPO=https://github.com/<dono>/<repo>.git
+   ARQUIVO=docker-compose.prod.yml
+   RAMO=main
+   ```
+   Repositório privado: `REPO=git@github.com:<dono>/<repo>.git` e
+   `CHAVE=/root/.ssh/<chave de deploy só leitura do repo>`. Se a busca ou a
+   validação falhar, o arquivo atual fica, o log ganha `ERRO <site>: compose:
+   ...` (`deploy_falhou` 1) e o `pull` + `up -d` seguem. **Cuidado:** o
+   compose roda como root na VPS (pode montar `/`, o socket do Docker, usar
+   `privileged`), então ligar o `.origem` dá esse poder a quem consegue um
+   commit no ramo do site. Só ligue para repositório que você controla.
 
    **Métrica do cron.** A cada rodada o script grava `deploy.prom` no volume
    `textfile` da borda (`traefik_textfile`, achado pelo Docker; é o mesmo do

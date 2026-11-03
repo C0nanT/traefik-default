@@ -36,8 +36,8 @@ O TLS mínimo 1.2 vale para todos os routers sem nenhuma label.
    imagem (o container herda). Use um endpoint próprio (ex.: `/api/health`).
 5. **Labels** com `traefik.enable=true` (sem ela o Traefik ignora o
    container), router em `websecure`, as peças `@file` e o emissor certo.
-6. Na VPS, o site mora em `/opt/apps/<projeto>/` com **só**
-   `docker-compose.yml` e `.env`.
+6. Na VPS, o site mora em `/opt/apps/<projeto>/` com `docker-compose.yml` e
+   `.env`, e opcionalmente `.origem` (ver "Deploy").
 
 ## O compose de exemplo (o mesmo do smoke test)
 
@@ -155,7 +155,10 @@ Junto com a `so-cloudflare@file`, ponha as duas primeiro, nesta ordem:
 instalação no README, "Checklist da VPS") roda `pull` + `up -d` em cada
 `/opt/apps/*/`. Basta o site estar em `/opt/apps/<projeto>` e o CI publicar a
 imagem na tag que o compose usa (ex.: `latest`): push na `main` → no ar em até
-~10 min. Erros vão para `/var/log/atualizar-apps/atualizar-apps.log`. Deploy pelo CI via SSH
+~10 min. Erros vão para `/var/log/atualizar-apps/atualizar-apps.log`.
+Mudança no compose (labels, peças) só chega sozinha se a pasta tiver o
+arquivo `.origem` (README, "Compose da origem"); sem ele, copie o compose
+novo para a VPS à mão. Deploy pelo CI via SSH
 foi descartado (exigiria expor a porta 22) e o Watchtower também (projeto
 arquivado).
 
