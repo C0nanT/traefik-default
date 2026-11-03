@@ -25,7 +25,8 @@ trap 'rm -rf "$TMP"' EXIT
 # O falso grava "docker <args> @<pasta atual>" no log; FALSO_SAIDA_DOCKER != 0
 # faz o docker falhar; FALSO_FALHA_EM=<pasta> faz falhar só naquela pasta;
 # FALSO_MSG_ERRO é o texto (com \n) que o docker escreve ao falhar;
-# FALSO_MOUNTPOINT é a resposta de `docker volume inspect`.
+# FALSO_MOUNTPOINT é a resposta de `docker volume inspect`;
+# FALSO_FALHA_CONFIG=1 faz falhar só o `docker compose ... config`.
 novo_cenario() {
   CEN="$TMP/cenario"
   rm -rf "$CEN"
@@ -35,6 +36,7 @@ novo_cenario() {
     printf '#!/usr/bin/env bash\n'
     printf 'echo "docker $* @$(basename "$PWD")" >>%q\n' "$CEN/chamadas.log"
     printf '[ "$1 $2" = "volume inspect" ] && { echo "${FALSO_MOUNTPOINT:-}"; exit 0; }\n'
+    printf '[ -n "${FALSO_FALHA_CONFIG:-}" ] && [[ " $* " == *" config "* ]] && { echo "compose inválido"; exit 1; }\n'
     printf 'if [ "${FALSO_FALHA_EM:-}" = "$(basename "$PWD")" ] || [ "${FALSO_SAIDA_DOCKER:-0}" != 0 ]; then\n'
     printf '  [ -n "${FALSO_MSG_ERRO:-}" ] && printf "%%b\\n" "$FALSO_MSG_ERRO"\n'
     printf '  exit 1\n'
@@ -193,6 +195,101 @@ verifica "padrão de produção: deploy.prom no mountpoint do volume traefik_tex
   test -f "$CEN/volume-textfile/deploy.prom"
 verifica "padrão de produção: pergunta ao docker pelo volume traefik_textfile" "$(cat "$CEN/chamadas.log")" \
   grep -q 'volume inspect.*traefik_textfile' "$CEN/chamadas.log"
+
+# --- compose da origem -------------------------------------------------------
+echo "== compose da origem (.origem) =="
+# Repositório de origem de verdade (git local, file://), sem rede.
+# origem_commit CONTEUDO: grava docker-compose.prod.yml na origem e commita.
+ORIGEM="$TMP/origem"
+git init -q -b main "$ORIGEM"
+origem_commit() {
+  printf '%s\n' "$1" >"$ORIGEM/docker-compose.prod.yml"
+  git -C "$ORIGEM" add docker-compose.prod.yml
+  git -C "$ORIGEM" -c user.name=teste -c user.email=teste@teste commit -q -m "$1"
+}
+origem_commit "versao: 1"
+
+# site_com_origem NOME [REPO]: site com docker-compose.yml antigo e .origem.
+site_com_origem() {
+  site "$1"
+  echo "versao: 0" >"$CEN/apps/$1/docker-compose.yml"
+  printf 'REPO=%s\nARQUIVO=docker-compose.prod.yml\nRAMO=main\n' "${2:-file://$ORIGEM}" >"$CEN/apps/$1/.origem"
+}
+compose_de() { cat "$CEN/apps/$1/docker-compose.yml"; }
+
+# Sem .origem: nada muda (o arquivo segue o que estava, nenhuma linha nova).
+novo_cenario
+site conan-torres
+echo "versao: 0" >"$CEN/apps/conan-torres/docker-compose.yml"
+roda_cron
+verifica "sem .origem: o docker-compose.yml fica como estava" "$(compose_de conan-torres)" \
+  test "$(compose_de conan-torres)" = "versao: 0"
+verifica "sem .origem: nada de config nem linha de compose" "$(cat "$CEN/chamadas.log" "$CEN/saida.log")" \
+  bash -c '! grep -q " config " "$1" && ! grep -q "compose" "$2"' _ "$CEN/chamadas.log" "$CEN/saida.log"
+
+# Origem mudou: troca o arquivo, valida antes, avisa no log, e roda pull + up -d.
+novo_cenario
+site_com_origem conan-torres
+roda_cron
+verifica "origem nova: docker-compose.yml passa a ser o da origem" "$(compose_de conan-torres)" \
+  test "$(compose_de conan-torres)" = "versao: 1"
+verifica "origem nova: valida com docker compose config antes de trocar" "$(cat "$CEN/chamadas.log")" \
+  grep -qE -- "compose -f .*config -q @conan-torres\$" "$CEN/chamadas.log"
+verifica "origem nova: linha 'compose atualizado <site> (<commit>)' no log" "$(cat "$CEN/saida.log")" \
+  grep -qE '^[0-9T:+-]+ compose atualizado conan-torres \([0-9a-f]{7,}\)$' "$CEN/saida.log"
+verifica "origem nova: pull + up -d depois da troca" "$(cat "$CEN/chamadas.log")" \
+  grep -qE -- "compose up -d.*@conan-torres\$" "$CEN/chamadas.log"
+verifica "origem nova: sem temporário sobrando na pasta do site" "$(ls -A "$CEN/apps/conan-torres")" \
+  test ! -e "$CEN/apps/conan-torres/.docker-compose.yml.novo"
+verifica "origem nova: deploy_falhou 0" "$(cat "$CEN/metricas/deploy.prom")" \
+  grep -qx 'deploy_falhou{app="conan-torres"} 0' "$CEN/metricas/deploy.prom"
+
+# Rodada seguinte, origem igual: nenhuma linha de compose nem config.
+: >"$CEN/chamadas.log"
+: >"$CEN/saida.log"
+roda_cron
+verifica "origem igual: nenhuma linha no log" "$(cat "$CEN/saida.log")" \
+  test ! -s "$CEN/saida.log"
+verifica "origem igual: não roda config" "$(cat "$CEN/chamadas.log")" \
+  bash -c '! grep -q " config " "$1"' _ "$CEN/chamadas.log"
+
+# Compose inválido na origem: recusa, mantém o antigo, ERRO e deploy_falhou 1,
+# mas pull + up -d seguem com o arquivo antigo.
+novo_cenario
+site_com_origem conan-torres
+FALSO_FALHA_CONFIG=1 roda_cron
+verifica "compose inválido: mantém o docker-compose.yml antigo" "$(compose_de conan-torres)" \
+  test "$(compose_de conan-torres)" = "versao: 0"
+verifica "compose inválido: linha ERRO <site>: compose no log" "$(cat "$CEN/saida.log")" \
+  grep -qE '^[0-9T:+-]+ ERRO conan-torres: compose: ' "$CEN/saida.log"
+verifica "compose inválido: deploy_falhou 1" "$(cat "$CEN/metricas/deploy.prom")" \
+  grep -qx 'deploy_falhou{app="conan-torres"} 1' "$CEN/metricas/deploy.prom"
+verifica "compose inválido: pull + up -d seguem" "$(cat "$CEN/chamadas.log")" \
+  grep -qE -- "compose up -d.*@conan-torres\$" "$CEN/chamadas.log"
+verifica "compose inválido: sem temporário sobrando" "$(ls -A "$CEN/apps/conan-torres")" \
+  test ! -e "$CEN/apps/conan-torres/.docker-compose.yml.novo"
+
+# Origem inacessível: ERRO numa linha só, arquivo antigo, os outros sites seguem.
+novo_cenario
+site_com_origem conan-torres "file://$TMP/nao-existe"
+site bbcontainer
+roda_cron
+verifica "origem inacessível: mantém o docker-compose.yml antigo" "$(compose_de conan-torres)" \
+  test "$(compose_de conan-torres)" = "versao: 0"
+verifica "origem inacessível: ERRO <site>: compose numa linha só" "$(cat "$CEN/saida.log")" \
+  test "$(grep -c 'ERRO conan-torres: compose: ' "$CEN/saida.log")" -eq 1 -a "$(wc -l <"$CEN/saida.log")" -eq 1
+verifica "origem inacessível: deploy_falhou 1 só para ele" "$(cat "$CEN/metricas/deploy.prom")" \
+  bash -c 'grep -qx "deploy_falhou{app=\"conan-torres\"} 1" "$1" && grep -qx "deploy_falhou{app=\"bbcontainer\"} 0" "$1"' _ "$CEN/metricas/deploy.prom"
+verifica "origem inacessível: pull + up -d seguem" "$(cat "$CEN/chamadas.log")" \
+  grep -qE -- "compose up -d.*@conan-torres\$" "$CEN/chamadas.log"
+
+# Arquivo que não existe na origem: mesmo tratamento.
+novo_cenario
+site_com_origem conan-torres
+sed -i 's/^ARQUIVO=.*/ARQUIVO=nao-existe.yml/' "$CEN/apps/conan-torres/.origem"
+roda_cron
+verifica "arquivo ausente na origem: mantém o antigo e ERRO no log" "$(compose_de conan-torres; cat "$CEN/saida.log")" \
+  bash -c '[ "$(cat "$1")" = "versao: 0" ] && grep -q "ERRO conan-torres: compose: " "$2"' _ "$CEN/apps/conan-torres/docker-compose.yml" "$CEN/saida.log"
 
 if [ "$FALHAS" -gt 0 ]; then
   echo "$FALHAS verificação(ões) falharam"

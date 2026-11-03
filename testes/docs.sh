@@ -167,6 +167,9 @@ tem README.md 'sudo install -m 644 /opt/traefik/vps/atualizar-apps.cron' "README
 tem vps/atualizar-apps.logrotate 'create 0644 root root' "logrotate recria o log legível pelo Alloy"
 tem README.md '{job="atualizar-apps"}' "README: consulta LogQL do log do cron"
 tem testes/verificacoes/08-log-cron.sh 'job=atualizar-apps' "smoke confere a linha do cron no Loki com o rótulo"
+tem README.md 'ARQUIVO=docker-compose.prod.yml' "README: exemplo do .origem do compose da origem"
+tem_re README.md 'compose +roda como root na VPS' "README: avisa que o .origem dá root a quem commita no site"
+tem docs/como-plugar-um-projeto.md '`.origem`' "guia: cita o .origem para o compose chegar sozinho"
 # Checklist manual da falha forçada: os passos ficam só nessa seção.
 falha_forcada="$tmp/README-falha-forcada"
 secao_readme "Checklist manual da falha forçada" > "$falha_forcada"

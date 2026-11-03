@@ -7,7 +7,12 @@
 # No fim de cada rodada grava deploy.prom no volume "textfile" da borda (o node
 # exporter publica): deploy_falhou{app} (0/1 por site) e o horário da rodada.
 # Se a métrica falhar, vira uma linha no log e o deploy segue igual.
+# Opcional por site: com um arquivo .origem na pasta (REPO=, ARQUIVO=, RAMO=,
+# CHAVE=), o docker-compose.yml é trocado pelo da origem quando ela muda, depois
+# de passar no `docker compose config`. Se a sincronia falhar, o arquivo atual
+# fica, vira ERRO no log (deploy_falhou 1) e pull + up -d seguem igual.
 set -uo pipefail
+export GIT_TERMINAL_PROMPT=0
 exec 9>"${TRAVA_ARQUIVO:-/run/atualizar-apps.lock}"
 flock -n 9 || exit 0
 
@@ -42,16 +47,53 @@ grava_metricas() {
   } >"$tmp" && chmod 644 "$tmp" && mv "$tmp" "$destino/deploy.prom" || { rm -f "$tmp"; return 1; }
 }
 
+# sincroniza_compose: roda na pasta do site. Sem .origem, não faz nada. Com ela,
+# busca o último commit do RAMO (cache git em .origem.git) e, se ARQUIVO mudou,
+# valida e troca o docker-compose.yml. Saída: "compose atualizado <site> (<commit>)"
+# quando troca; a mensagem do erro (código 1) quando falha.
+sincroniza_compose() {
+  local repo="" arquivo=docker-compose.yml ramo=main chave="" nome valor commit
+  local novo=.docker-compose.yml.novo
+  local ssh=()
+  [ -f .origem ] || return 0
+  while IFS='=' read -r nome valor; do
+    case "$nome" in
+      REPO) repo=$valor ;;
+      ARQUIVO) arquivo=$valor ;;
+      RAMO) ramo=$valor ;;
+      CHAVE) chave=$valor ;;
+    esac
+  done <.origem
+  [ -n "$repo" ] || { echo ".origem sem REPO"; return 1; }
+  [ -n "$chave" ] && ssh=(GIT_SSH_COMMAND="ssh -i $chave -o IdentitiesOnly=yes -o BatchMode=yes")
+  [ -d .origem.git ] || git init -q --bare .origem.git || return 1
+  env "${ssh[@]}" timeout 60 git --git-dir=.origem.git fetch -q --depth 1 "$repo" "+refs/heads/$ramo:refs/origem" || return 1
+  commit=$(git --git-dir=.origem.git rev-parse --short refs/origem) || return 1
+  git --git-dir=.origem.git show "refs/origem:$arquivo" >"$novo" || { rm -f "$novo"; return 1; }
+  if cmp -s "$novo" docker-compose.yml; then
+    rm -f "$novo"
+    return 0
+  fi
+  docker compose -f "$novo" config -q && mv "$novo" docker-compose.yml || { rm -f "$novo"; return 1; }
+  echo "compose atualizado $app ($commit)"
+}
+
 for dir in "${APPS_RAIZ:-/opt/apps}"/*/; do
   [ -f "$dir/docker-compose.yml" ] || continue
   cd "$dir" || continue
   app=$(basename "$dir")
+  falhou[$app]=0
+  if saida=$(sincroniza_compose 2>&1); then
+    [ -n "$saida" ] && echo "$(date -Is) $saida"
+  else
+    echo "$(date -Is) ERRO $app: compose: ${saida//$'\n'/ }"
+    falhou[$app]=1
+  fi
   if ! saida=$(docker compose pull -q 2>&1 && docker compose up -d --remove-orphans 2>&1); then
     # Uma linha só: o erro do docker tem várias, e as seguintes ficariam sem data nem ERRO.
     echo "$(date -Is) ERRO $app: ${saida//$'\n'/ }"
     falhou[$app]=1
   else
-    falhou[$app]=0
     if grep -qE 'Recreate|Started|Created' <<<"$saida"; then
       echo "$(date -Is) atualizado $app"
     fi
