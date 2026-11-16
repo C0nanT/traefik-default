@@ -79,6 +79,17 @@ loki.process "linhas" {
     drop_counter_reason = "ruido_socket_proxy"
   }
 
+  // Linhas velhas demais: descartadas aqui, antes do envio. O Loki recusa
+  // linha com mais de 168 h (reject_old_samples_max_age em loki/loki.yml) e
+  // responde 400 para o LOTE inteiro, e o Alloy descarta o lote ("no retries
+  // left"): as linhas novas que vieram junto somem com as velhas. Isso
+  // acontecia com o stderr do node-exporter (linhas de out/2026 reenviadas).
+  // O limite fica um pouco abaixo dos 168 h do Loki (margem de relógio/envio).
+  stage.drop {
+    older_than          = "160h"
+    drop_counter_reason = "linha_velha_demais"
+  }
+
   // Linhas do Traefik: separa o log de ACESSO (uma linha JSON por
   // requisição, ver accessLog em traefik/traefik.yml) do log do PRÓPRIO
   // Traefik (texto: erros de ACME, de roteamento...).
